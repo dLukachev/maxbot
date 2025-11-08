@@ -1,0 +1,6 @@
+maxapi
+python-dotenv
+sqlalchemy
+redis
+greenlet
+aiosqlite

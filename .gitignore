@@ -1,0 +1,7 @@
+.env
+.vevn
+__pycache__/
+.DS_Store
+.github
+.dockerignore
+*.sqlite3
