@@ -2,9 +2,10 @@ import os
 import asyncio
 import logging
 
-from maxapi import Bot, Dispatcher
-from maxapi.types import BotStarted, Command, MessageCreated
+from core.user_handlers.user import user
+from core.database.models import async_main
 
+from maxapi import Bot, Dispatcher
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -14,23 +15,13 @@ token = os.getenv("TOKEN", "NOT_FIND_TOKEN")
 bot = Bot(token)
 dp = Dispatcher()
 
-# Ответ бота при нажатии на кнопку "Начать"
-@dp.bot_started()
-async def bot_started(event: BotStarted):
-    await event.bot.send_message(
-        chat_id=event.chat_id,
-        text='Привет! Отправь мне /start'
-    )
-
-# Ответ бота на команду /start
-@dp.message_created(Command('start'))
-async def hello(event: MessageCreated):
-    await event.message.answer(f"Пример чат-бота для MAX 💙")
-
-
 async def main():
     await dp.start_polling(bot)
 
+async def init():
+    await async_main()
 
 if __name__ == '__main__':
+    dp.include_routers(user)
+    asyncio.run(init())
     asyncio.run(main())

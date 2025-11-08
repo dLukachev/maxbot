@@ -5,3 +5,4 @@ __pycache__/
 .github
 .dockerignore
 *.sqlite3
+открой.md
