@@ -80,9 +80,9 @@ def create_start_keyboard():
     """Основная стартовая клавиатура."""
     kb = InlineKeyboardBuilder()
     kb.row(
-        ChatButton(text='Начать 🎯', chat_title='Начать 🎯'),
-        ChatButton(text='Профиль 👤', chat_title='Профиль 👤'),
-        ChatButton(text='Цели 🧠', chat_title='Цели 🧠')
+        CallbackButton(text='Начать 🎯', payload='start_session'),
+        CallbackButton(text='Профиль 👤', payload='get_profile'),
+        CallbackButton(text='Цели 🧠', payload='get_targets')
     )
     return kb.as_markup()
 
@@ -92,9 +92,9 @@ def create_stop_keyboard():
     """Клавиатура для остановки."""
     kb = InlineKeyboardBuilder()
     kb.row(
-        ChatButton(text='Стоп ❌', chat_title='Стоп ❌'),
-        ChatButton(text='Профиль 👤', chat_title='Профиль 👤'),
-        ChatButton(text='Цели 🧠', chat_title='Цели 🧠')
+        CallbackButton(text='Стоп ❌', payload='stop_session'),
+        CallbackButton(text='Профиль 👤', payload='get_profile'),
+        CallbackButton(text='Цели 🧠', payload='get_targets')
     )
     return kb.as_markup()
 
