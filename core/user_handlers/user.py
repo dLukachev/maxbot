@@ -291,7 +291,7 @@ async def get_profile(message: MessageCallback, context: MemoryContext):
 
     await message.message.answer(answer)
     
-@user.message_created(F.callback.payload == "get_targets")
+@user.message_callback(F.callback.payload == "get_targets")
 async def get_targets(message: MessageCreated, context: MemoryContext):
     user_state = await context.get_state()
     if user_state == "UserStates:counted_time":
