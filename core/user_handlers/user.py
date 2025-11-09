@@ -121,7 +121,7 @@ async def change_targets(callback: MessageCallback, context: MemoryContext):
     await context.set_data({'items': items})
 
 @user.message_callback(F.callback.payload == "target_is_done")
-async def meke_target_is_done(callback: MessageCallback, context: MemoryContext):
+async def make_target_is_done(callback: MessageCallback, context: MemoryContext):
     user_state = await context.get_state()
     if user_state == "UserStates:counted_time":
         await callback.message.answer("Сначала заверши подсчет времени!", attachments=[stop_kb]) # type: ignore
@@ -131,7 +131,7 @@ async def meke_target_is_done(callback: MessageCallback, context: MemoryContext)
     if items == []:
         return
     await callback.message.delete() # type: ignore
-    await callback.message.answer("Выбери что ты выполнил(а):", attachments=[inline_keyboard_from_items(items, "item")]) # type: ignore
+    await callback.message.answer("Выбери что ты выполнил(а):", attachments=[inline_keyboard_from_items(items, "done")]) # type: ignore
     await context.set_data({'items': items})
 
 @user.message_callback(F.callback.payload == "cancel_change_target")
@@ -143,13 +143,12 @@ async def cancel_change_targets(callback: MessageCallback, context: MemoryContex
         return
     data = await context.get_data()
     if not data:
-        await callback.message.answer("Какая-то ошибка:(") # type: ignore
-        await callback.message.delete() # type: ignore
-        await context.clear()
-        return
+        data = await TargetCRUD.get_all_target_today(user_id=callback.from_user.user_id, day=datetime.today())
+    
     await callback.message.delete() # type: ignore
     answer = ''
     ind = 1
+    # 
     for a in data.get("items", []):
         for index, item in enumerate(a):
             answer += f"{ind}. {item.description}\n"
