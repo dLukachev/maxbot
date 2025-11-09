@@ -216,8 +216,8 @@ async def change_target_in_db(message: MessageCreated, context: MemoryContext):
 
 # ----------------- TEXT -----------------
 
-@user.message_created(F.text.func(lambda t: t and t.lower() == "начать 🎯"))
-async def start_going(message: MessageCreated, context: MemoryContext):
+@user.message_callback(F.callback.payload == "start_session")
+async def start_going(message: MessageCallback, context: MemoryContext):
     user_state = await context.get_state()
     if user_state == "UserStates:counted_time": # type: ignore
         await message.message.answer("У тебя уже открыта сессия...", attachments=[stop_kb])
@@ -225,29 +225,29 @@ async def start_going(message: MessageCreated, context: MemoryContext):
         # await set_state_r(redis, message.from_user.id, 'go') # type: ignore
         return
     else:
-        session = await SessionCRUD.get_active_session(message.from_user.id) # type: ignore
+        session = await SessionCRUD.get_active_session(message.from_user.user_id) # type: ignore
         if not session:
             now = datetime.now(UTC_PLUS_3)
-            await SessionCRUD.create(user_id=message.from_user.id, date_start=now, date_end=now, is_active=True) # type: ignore
+            await SessionCRUD.create(user_id=message.from_user.user_id, date_start=now, date_end=now, is_active=True) # type: ignore
             # await set_state_r(redis, message.from_user.id, 'go') # type: ignore
             await context.set_state(UserStates.counted_time)
             await message.message.answer(f"Фиксирую старт... {now.strftime('%m-%d %H:%M:%S')}", attachments=[stop_kb])
 
 
-@user.message_created(F.text.func(lambda t: t and t.lower() == "стоп ❌"), UserStates.counted_time)
-async def stop_going(message: MessageCreated, context: MemoryContext):
+@user.message_callback(F.callback.payload == "stop_session", UserStates.counted_time)
+async def stop_going(message: MessageCallback, context: MemoryContext):
     await context.clear()
 
     now = datetime.now(UTC_PLUS_3)
     now = now.replace(tzinfo=None)
 
-    session = await SessionCRUD.get_active_session(message.from_user.id) # type: ignore
+    session = await SessionCRUD.get_active_session(message.from_user.user_id) # type: ignore
 
     await SessionCRUD.update(session_id=session.id, date_end=now, is_active=False) # type: ignore
         
     # суммируем в профиле пользователя
     elapsed = now - session.date_start # type: ignore
-    await UserCRUD.add_duration(message.from_user.id, elapsed) # type: ignore
+    await UserCRUD.add_duration(message.from_user.user_id, elapsed) # type: ignore
 
     # удаляем запись стейта (временно откл)
     # await delete_state_r(redis, message.from_user.id) # type: ignore
@@ -260,20 +260,20 @@ async def stop_going(message: MessageCreated, context: MemoryContext):
     await message.message.answer(f"Добавлено: `{h:02d}:{m:02d}:{s:02d}`", attachments=[start_kb])
 
 
-@user.message_created(F.text.func(lambda t: t and t.lower() == "профиль 👤"))
-async def get_profile(message: MessageCreated, context: MemoryContext):
+@user.message_callback(F.callback.payload == "get_profile")
+async def get_profile(message: MessageCallback, context: MemoryContext):
     user_state = await context.get_state()
     if user_state == "UserStates:counted_time":
         await message.message.answer("Сначала заверши подсчет времени!", attachments=[stop_kb])
         return
     else:
-        session = await SessionCRUD.get_active_session(message.from_user.id) # type: ignore
+        session = await SessionCRUD.get_active_session(message.from_user.user_id) # type: ignore
         if session:
             await context.set_state(UserStates.counted_time)
             await message.message.answer("Сначала заверши подсчет времени!", attachments=[stop_kb])
             return
     
-    user_data = await UserCRUD.get_by_tid(message.from_user.id) # type: ignore
+    user_data = await UserCRUD.get_by_tid(message.from_user.user_id) # type: ignore
     next_level = None
     # Находим минимальный порог, который больше текущих поинтов пользователя
     lp = get_levels_config()
@@ -291,20 +291,20 @@ async def get_profile(message: MessageCreated, context: MemoryContext):
 
     await message.message.answer(answer)
     
-@user.message_created(F.text.func(lambda t: t and t.lower() == "цели 🧠"))
+@user.message_created(F.callback.payload == "get_targets")
 async def get_targets(message: MessageCreated, context: MemoryContext):
     user_state = await context.get_state()
     if user_state == "UserStates:counted_time":
         await message.message.answer("Сначала заверши подсчет времени!", attachments=[stop_kb])
         return
     else:
-        session = await SessionCRUD.get_active_session(message.from_user.id) # type: ignore
+        session = await SessionCRUD.get_active_session(message.from_user.user_id) # type: ignore
         if session:
             await context.set_state(UserStates.counted_time)
             await message.message.answer("Сначала заверши подсчет времени!", attachments=[stop_kb])
             return
     
-    target = await TargetCRUD.get_all_target_today(message.from_user.id, datetime.today()) # type: ignore
+    target = await TargetCRUD.get_all_target_today(message.from_user.user_id, datetime.today()) # type: ignore
     if target == []:
         await message.message.answer("Почему то не вижу твоих целей на сегодня(\nВозможно ты их просто не написал(а)..(в общем где-то моя ошибка)\nМожешь это сделать прямо сейчас!")
         await context.set_state(UserStates.wrighting_targets)
@@ -316,3 +316,5 @@ async def get_targets(message: MessageCreated, context: MemoryContext):
             answer += f"{ind}. {item.description}\n"
             ind+=1
     await message.message.answer(f"Твои цели на сегодня:\n{answer}", attachments=[change_target])
+
+    
