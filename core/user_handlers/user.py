@@ -41,12 +41,12 @@ async def blocker(message: MessageCreated):
 
 # ----------------- CALLBACK -----------------
 
-@user.message_callback()
-async def debug_cb(event: MessageCallback):
-    print("DEBUG payload =", event.callback.payload)
-    await event.message.answer(text=f"payload={event.callback.payload}")
+# @user.message_callback()
+# async def debug_cb(event: MessageCallback):
+#     print("DEBUG payload =", event.callback.payload)
+#     await event.message.answer(text=f"payload={event.callback.payload}")
 
-@user.message_callback(F.payload.in_({"back_wright_target", "not_right"}))
+@user.message_callback(F.callback.payload.in_({"back_wright_target", "not_right"}))
 async def wrt_in_db(callback: MessageCallback, context: MemoryContext):
     current = await context.get_state()
     text = get_text("instructions_for_wrighting")
@@ -71,7 +71,7 @@ async def wrt_in_db(callback: MessageCallback, context: MemoryContext):
         await callback.message.answer(get_text("instructions_for_wrighting")) # type: ignore
     
     await context.set_state(UserStates.wrighting_targets)
-    await callback.message.delete() # type: ignore
+    await callback.message.delete()
 
 @user.message_created(UserStates.wrighting_targets)
 async def get_and_wright_targets_in_db(message: MessageCreated, context: MemoryContext):
@@ -84,11 +84,11 @@ async def get_and_wright_targets_in_db(message: MessageCreated, context: MemoryC
             answer += f"{index}. {text}\n"
             index += 1
 
-        await message.delete() # type: ignore
+        await message.message.delete()
         await message.message.answer(f"Твой список:\n{answer}\nВерно?", attachments=[confirmation]) # type: ignore
         await context.set_data({"targets": texts})
 
-@user.message_callback(F.data == "right", UserStates.wrighting_targets)
+@user.message_callback(F.callback.payload == "right", UserStates.wrighting_targets)
 async def get_and_wright_targets_in_db_R(callback: MessageCallback, context: MemoryContext):
     data = await context.get_data()
     targets = data.get("targets")
@@ -102,7 +102,7 @@ async def get_and_wright_targets_in_db_R(callback: MessageCallback, context: Mem
     await callback.message.answer("Успешно!", attachments=[start_kb]) # type: ignore
     await context.clear()
 
-@user.message_callback(F.data == "back_change_target")
+@user.message_callback(F.callback.payload == "back_change_target")
 async def change_targets(callback: MessageCallback, context: MemoryContext):
     # здесь должно происходить измененеие сообщения, 
     # чтобы появилась другая клава + кнопка отмены
@@ -120,7 +120,7 @@ async def change_targets(callback: MessageCallback, context: MemoryContext):
     await callback.message.answer("Выбери что хочешь изменить:", attachments=[inline_keyboard_from_items(items, "item")]) # type: ignore
     await context.set_data({'items': items})
 
-@user.message_callback(F.data == "target_is_done")
+@user.message_callback(F.callback.payload == "target_is_done")
 async def meke_target_is_done(callback: MessageCallback, context: MemoryContext):
     user_state = await context.get_state()
     if user_state == "UserStates:counted_time":
@@ -134,7 +134,7 @@ async def meke_target_is_done(callback: MessageCallback, context: MemoryContext)
     await callback.message.answer("Выбери что ты выполнил(а):", attachments=[inline_keyboard_from_items(items, "item")]) # type: ignore
     await context.set_data({'items': items})
 
-@user.message_callback(F.data == "cancel_change_target")
+@user.message_callback(F.callback.payload == "cancel_change_target")
 async def cancel_change_targets(callback: MessageCallback, context: MemoryContext):
     user_state = await context.get_state()
     if user_state == "UserStates:counted_time":
@@ -156,7 +156,7 @@ async def cancel_change_targets(callback: MessageCallback, context: MemoryContex
             ind+=1
     await callback.message.answer(f"Твои цели на сегодня:\n{answer}", attachments=[change_target]) # type: ignore
 
-@user.message_callback(F.data.startswith("item:"))
+@user.message_callback(F.callback.payload.startswith("item:"))
 async def take_id_and_change(callback: MessageCallback, context: MemoryContext):
     user_state = await context.get_state()
     if user_state == "UserStates:counted_time":
@@ -172,7 +172,7 @@ async def take_id_and_change(callback: MessageCallback, context: MemoryContext):
     await callback.message.answer("Напиши цель снова и я ее изменю (тут можно запятые кста)") # type: ignore
     await context.set_state(UserStates.change_targets)
 
-@user.message_callback(F.data.startswith("done:"))
+@user.message_callback(F.callback.payload.startswith("done:"))
 async def take_id_and_change_isdone(callback: MessageCallback, context: MemoryContext):
     user_state = await context.get_state()
     if user_state == "UserStates:counted_time":
@@ -210,7 +210,7 @@ async def change_target_in_db(message: MessageCreated, context: MemoryContext):
     items = await TargetCRUD.get_all_target_today(message.from_user.id, datetime.today()) # type: ignore
     if items == []:
         return
-    await message.delete() # type: ignore
+    await message.message.delete() # type: ignore
     await message.message.answer("Выбери что хочешь изменить:", attachments=[inline_keyboard_from_items(items, "item")]) # type: ignore
     await context.set_data({"items": items})
 
