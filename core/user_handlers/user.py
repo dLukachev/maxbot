@@ -3,6 +3,15 @@ from maxapi import Router, F
 from maxapi.types import MessageCreated, MessageCallback, Command, DialogCleared
 from maxapi.context import MemoryContext
 from sqlalchemy import Sequence
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),  # вывод в консоль
+    ]
+)
 
 from utils.states import FirstStates, UserStates
 from core.user_handlers.kb import (
@@ -66,11 +75,6 @@ async def blocker(message: MessageCreated):
 
 # ----------------- CALLBACK -----------------
 
-# @user.message_callback()
-# async def debug_cb(event: MessageCallback):
-#     print("DEBUG payload =", event.callback.payload)
-#     await event.message.answer(text=f"payload={event.callback.payload}")
-
 @user.message_callback(F.callback.payload.in_({"back_wright_target", "not_right"}))
 async def wrt_in_db(callback: MessageCallback, context: MemoryContext):
     current = await context.get_state()
@@ -101,8 +105,13 @@ async def get_and_wright_targets_in_db(message: MessageCreated, context: MemoryC
             answer += f"{index}. {text}\n"
             index += 1
 
-    await message.message.delete()
-    await update_menu(context, message.message, text=f"Твой список:\n{answer}\nВерно?", attachments=[confirmation]) # type: ignore
+    # await message.message.delete()
+    print("ПОПАЛ СЮДА -------------")
+    try:
+        result = await message.message.edit(f"Твой список:\n{answer}\nВерно?", attachments=[confirmation])
+    except Exception:
+        result = await update_menu(context, message.message, text=f"Твой список:\n{answer}\nВерно?", attachments=[confirmation]) # type: ignore
+    print(f"{result} результат <---------")
     await context.set_data({"targets": texts})
 
 @user.message_callback(F.callback.payload == "right", UserStates.wrighting_targets)
@@ -507,6 +516,8 @@ async def stop_going(message: MessageCallback, context: MemoryContext):
     now = now.replace(tzinfo=None)
 
     session = await SessionCRUD.get_active_session(message.from_user.user_id) # type: ignore
+    if not session:
+        await update_menu(context, message.message, text="Ошибка! Не вижу сессии%()", attachments=[start_kb])
 
     await SessionCRUD.update(session_id=session.id, date_end=now, is_active=False) # type: ignore
         
@@ -576,11 +587,11 @@ async def get_time(message: MessageCreated, context: MemoryContext):
     text = message.message.body.text
     time = hhmmss_to_seconds(text) # type: ignore
     if time is None:
-        await update_menu(context, message.message, text="Какая то ошибка.. Попробуй снова")
+        await update_menu(context, message.message, text="Какая то ошибка.. Попробуй снова", attachments=[change_time_activity_kb])
         return
     res = await UserCRUD.add_duration(message.from_user.user_id, time) # type: ignore
     if res is None:
-        await update_menu(context, message.message, text="Какая то ошибка.. Попробуй снова")
+        await update_menu(context, message.message, text="Какая то ошибка.. Попробуй снова", attachments=[change_time_activity_kb])
         return
 
     # Build profile text (same as in get_profile) and show it under the "Успешно!" header.
@@ -599,15 +610,15 @@ async def get_time(message: MessageCreated, context: MemoryContext):
         answer += f"Поинтов: {user_data.points} (максимальный уровень достигнут!)\n" # type: ignore
     answer += f"Общее время активности: {format_total_duration(user_data.count_time)}" # type: ignore
 
-    # Remove the user's message (they sent the time) so the UI stays clean
-    id_message = message.message.body.mid
-    try:
-        print(f"Удаляю сообщение! Айди {id_message}")
-        # result = await message.bot.delete_message(id_message) # type: ignore
-        result = await message.message.delete()
-        print(f"Результат - {result}")
-    except Exception as e:
-        print(f"Ошибка! {e}")
+    # # Remove the user's message (they sent the time) so the UI stays clean
+    # id_message = message.message.body.mid
+    # try:
+    #     print(f"Удаляю сообщение! Айди {id_message}")
+    #     # result = await message.bot.delete_message(id_message) # type: ignore
+    #     result = await message.message.delete()
+    #     print(f"Результат - {result}")
+    # except Exception as e:
+    #     print(f"Ошибка! {e}")
 
     # Show success and the profile under it
     try:
