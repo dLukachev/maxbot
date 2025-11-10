@@ -5,7 +5,7 @@ from maxapi.context import MemoryContext
 from sqlalchemy import Sequence
 
 from utils.states import FirstStates, UserStates
-from core.user_handlers.kb import wright_target, confirmation, start_kb, stop_kb, change_target, inline_keyboard_from_items, cancel_button_kb, change_time_activity_kb
+from core.user_handlers.kb import wright_target, confirmation, start_kb, stop_kb, change_target, inline_keyboard_from_items, cancel_button_kb, change_time_activity_kb, Item
 from utils.random_text import get_text
 from core.database.requests import UserCRUD, TargetCRUD, SessionCRUD
 from utils.redis import get_redis_async, get_state_r, set_state_r, delete_state_r
@@ -132,9 +132,26 @@ async def make_target_is_done(callback: MessageCallback, context: MemoryContext)
     items = await TargetCRUD.get_all_target_today(callback.from_user.user_id, datetime.today()) # type: ignore
     if items == []:
         return
+    # Сохраняем items в context и показываем интерактивную клавиатуру с чекбоксами
     await callback.message.delete() # type: ignore
-    await callback.message.answer("Выбери что ты выполнил(а):", attachments=[inline_keyboard_from_items(items, "done")]) # type: ignore
-    await context.set_data({'items': items})
+    # Инициализируем checked set из БД — уже помеченные задачи должны отображаться как ✅
+    initial_checked = set()
+    for group in items:
+        for t in group:
+            if getattr(t, 'is_done', False):
+                initial_checked.add(t.id)
+    await context.set_data({'items': items, 'pending_done': list(initial_checked)})
+    # items — формат List[List[Target]]; конвертируем в our Item model defined in kb
+    # Собираем модели
+    model_groups = []
+    for group in items:
+        row = []
+        for t in group:
+            row.append(Item(id=t.id, description=t.description))
+        model_groups.append(row)
+
+    await callback.message.answer("Выбери что ты выполнил(а):", attachments=[inline_keyboard_from_items_with_checks(model_groups, initial_checked, "done")]) # type: ignore
+    # оставляем состояние прежним (не переключаем стейт)
 
 @user.message_callback(F.callback.payload == "cancel_change_target")
 async def cancel_change_targets(callback: MessageCallback, context: MemoryContext):
@@ -153,12 +170,14 @@ async def cancel_change_targets(callback: MessageCallback, context: MemoryContex
     if isinstance(data, list):
         for i in data:
             for j in i:
-                answer += f"{ind}. {j.description}\n"
+                mark = '✅' if getattr(j, 'is_done', False) else '❌'
+                answer += f"{ind}. {mark} {j.description}\n"
                 ind+=1
     else:
         for a in data.get("items", []): # pyright: ignore[reportAttributeAccessIssue]
             for index, item in enumerate(a):
-                answer += f"{ind}. {item.description}\n"
+                mark = '✅' if getattr(item, 'is_done', False) else '❌'
+                answer += f"{ind}. {mark} {item.description}\n"
                 ind+=1
     await context.clear()
     await callback.message.answer(f"Твои цели на сегодня:\n{answer}", attachments=[change_target]) # type: ignore
@@ -219,17 +238,44 @@ async def take_id_and_change_isdone(callback: MessageCallback, context: MemoryCo
     if user_state == "UserStates:counted_time":
         await callback.message.answer("Сначала заверши подсчет времени!", attachments=[stop_kb]) # type: ignore
         return
-    id = callback.callback.payload
-    if not id:
+    # Toggle target in pending_done list stored in context, then update the keyboard shown to the user.
+    payload = callback.callback.payload
+    if not payload:
         await callback.message.answer("Ошибка! Хз почему, но айди не вижу(") # type: ignore
         return
-    id = id.split(":")[1]
-    target = await TargetCRUD.get_by_id(id) # type: ignore
-    if not target:
-        await callback.message.answer("Такой цели не вижу(:)") # type: ignore
-        return
-    isdone_ = True if target.is_done == False else False
-    await TargetCRUD.update(target_id=id, is_done=isdone_) # type: ignore
+    target_id = int(payload.split(":")[1])
+
+    data = await context.get_data() or {}
+    items = data.get('items')
+    if not items:
+        # reload items from db as fallback
+        items = await TargetCRUD.get_all_target_today(callback.from_user.user_id, datetime.today()) # type: ignore
+        await context.set_data({'items': items})
+
+    pending = set(data.get('pending_done', []))
+    if target_id in pending:
+        pending.remove(target_id)
+    else:
+        pending.add(target_id)
+
+    await context.set_data({'items': items, 'pending_done': list(pending)})
+
+    # Rebuild keyboard with updated checks and edit the message
+    model_groups = []
+    for group in items:
+        row = []
+        for t in group:
+            row.append(Item(id=t.id, description=t.description))
+        model_groups.append(row)
+
+    # Edit message: replace keyboard (maxapi may not support edit_message_reply_markup directly, so send a new message and delete the previous)
+    # We'll delete the callback message and send a fresh one with updated keyboard for simplicity.
+    try:
+        await callback.message.delete() # type: ignore
+    except Exception:
+        pass
+
+    await callback.message.answer("Выбери что ты выполнил(а):", attachments=[inline_keyboard_from_items_with_checks(model_groups, pending, "done")]) # type: ignore
 
 @user.message_created(UserStates.change_targets)
 async def change_target_in_db(message: MessageCreated, context: MemoryContext):
@@ -254,6 +300,64 @@ async def change_target_in_db(message: MessageCreated, context: MemoryContext):
     await message.message.delete() # type: ignore
     await message.message.answer("Выбери что хочешь изменить:", attachments=[inline_keyboard_from_items(items, "item")]) # type: ignore
     await context.set_data({"items": items})
+
+# Коммит и отмена для пометки выполненных задач
+
+@user.message_callback(F.callback.payload == "commit_done")
+async def commit_done_handler(callback: MessageCallback, context: MemoryContext):
+    data = await context.get_data() or {}
+    pending = set(data.get('pending_done', []))
+    items = data.get('items', [])
+    if not items:
+        await callback.message.answer("Нет задач для подтверждения.") # type: ignore
+        await context.clear()
+        return
+
+    # Применяем изменения к БД: для каждой задачи из items — если её id в pending, отмечаем is_done=True, иначе оставляем без изменений
+    # Чтобы минимизировать число запросов — обновляем только выбранные
+    applied = 0
+    for group in items:
+        for t in group:
+            if t.id in pending and not t.is_done:
+                await TargetCRUD.update(target_id=t.id, is_done=True) # type: ignore
+                applied += 1
+
+    # Применяем изменения: синхронизируем состояния is_done так, как указано в pending (desired)
+    desired = pending
+    applied = 0
+    removed = 0
+    for group in items:
+        for t in group:
+            if t.id in desired and not t.is_done:
+                await TargetCRUD.update(target_id=t.id, is_done=True) # type: ignore
+                applied += 1
+            if t.id not in desired and t.is_done:
+                await TargetCRUD.update(target_id=t.id, is_done=False) # type: ignore
+                removed += 1
+
+    msg_parts = []
+    if applied:
+        msg_parts.append(f"Отмечено выполненным: {applied}")
+    if removed:
+        msg_parts.append(f"Снято отметок: {removed}")
+    if not msg_parts:
+        msg = "Нет изменений."
+    else:
+        msg = "; ".join(msg_parts)
+
+    await callback.message.answer(msg, attachments=[start_kb]) # type: ignore
+    await context.clear()
+
+
+@user.message_callback(F.callback.payload == "cancel_done")
+async def cancel_done_handler(callback: MessageCallback, context: MemoryContext):
+    # Просто откатываем изменения и убираем временную клавиатуру
+    await context.clear()
+    try:
+        await callback.message.delete() # type: ignore
+    except Exception:
+        pass
+    await callback.message.answer("Отменено.", attachments=[start_kb]) # type: ignore
 
 @user.message_callback(F.callback.payload == "start_session")
 async def start_going(message: MessageCallback, context: MemoryContext):
@@ -372,7 +476,8 @@ async def get_targets(message: MessageCreated, context: MemoryContext):
     ind = 1
     for a in target:
         for index, item in enumerate(a):
-            answer += f"{ind}. {item.description}\n"
+            mark = '✅' if getattr(item, 'is_done', False) else '❌'
+            answer += f"{ind}. {mark} {item.description}\n"
             ind+=1
     await message.message.answer(f"Твои цели на сегодня:\n{answer}", attachments=[change_target])
     await context.set_data({"items": target})

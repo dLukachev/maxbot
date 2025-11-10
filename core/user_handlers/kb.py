@@ -45,6 +45,46 @@ def inline_keyboard_from_items(items: List[List[Item]], callback_prefix: str):
 
     return kb.as_markup()
 
+
+def inline_keyboard_from_items_with_checks(items: List[List[Item]], checked_ids: set[int], callback_prefix: str):
+    """
+    Построить inline-клавиатуру где у каждой кнопки есть чекбокс, отражающий checked_ids.
+    checked_ids: set of target.id, отмеченные как выбранные (готовые).
+    callback_prefix: префикс для payload — например 'done' или 'select'.
+    Внизу добавляем кнопки Готово (commit) и Отмена (cancel_done).
+    """
+    kb = InlineKeyboardBuilder()
+
+    if not items:
+        kb.row(
+            CallbackButton(text="Ошибка!", payload="ERROR")
+        )
+        return kb.as_markup()
+
+    index = 1
+    for group in items:
+        row = []
+        for item in group:
+            # use ✅ for done and ❌ for not done
+            checked = "✅ " if item.id in checked_ids else "❌ "
+            row.append(
+                CallbackButton(
+                    text=f"{checked}{index}. {item.description}",
+                    payload=f"{callback_prefix}:{item.id}"
+                )
+            )
+            index += 1
+        if row:
+            kb.row(*row)
+
+    # Контролы внизу: Готово (commit) и Отмена
+    kb.row(
+        CallbackButton(text="Готово", payload="commit_done"),
+        CallbackButton(text="Отмена", payload="cancel_done")
+    )
+
+    return kb.as_markup()
+
 def change_time_activity():
     kb = InlineKeyboardBuilder()
     kb.row(CallbackButton(text="Изменить общее время", payload="change_time")) # type: ignore
