@@ -1,6 +1,6 @@
 from datetime import datetime
 from maxapi import Router, F
-from maxapi.types import MessageCreated, MessageCallback, Command, DialogCleared
+from maxapi.types import MessageCreated, MessageCallback, Command, DialogCleared, BotStarted
 from maxapi.context import MemoryContext
 from sqlalchemy import Sequence
 import logging
@@ -40,7 +40,11 @@ user = Router()
 redis = get_redis_async()
 
 @user.dialog_cleared()
-async def handle_dialog_cleared(event: DialogCleared, context: MemoryContext):
+async def handle_dialog_cleared(event: DialogCleared):
+    await event.bot.send_message(chat_id=event.chat_id, user_id=event.user.user_id, text="Меню:", attachments=[start_kb]) # type: ignore
+
+@user.bot_started()
+async def handle_bot_starterd(event: BotStarted):
     await event.bot.send_message(chat_id=event.chat_id, user_id=event.user.user_id, text="Меню:", attachments=[start_kb]) # type: ignore
 
 # ----------------- COMMANDS -----------------
@@ -92,11 +96,12 @@ async def wrt_in_db(callback: MessageCallback, context: MemoryContext):
             await update_menu(context, callback.message, get_text("instructions_for_wrighting")) # type: ignore
     
     await context.set_state(UserStates.wrighting_targets)
-    await callback.message.delete()
 
 @user.message_created(UserStates.wrighting_targets)
 async def get_and_wright_targets_in_db(message: MessageCreated, context: MemoryContext):
     texts = message.message.body.text # type: ignore
+    mid = await context.get_data()
+    mid = mid.get("mid")
     answer = ""
     index = 1
     if texts is not None:
@@ -104,13 +109,12 @@ async def get_and_wright_targets_in_db(message: MessageCreated, context: MemoryC
         for text in texts:
             answer += f"{index}. {text}\n"
             index += 1
+    # print("ПОПАЛ на удаление сообдения -------------")
+    # result = await message.bot.delete_message(mid)
+    # print(f"ПОПАЛ на результат: {result} -------------")
 
-    # await message.message.delete()
     print("ПОПАЛ СЮДА -------------")
-    try:
-        result = await message.message.edit(f"Твой список:\n{answer}\nВерно?", attachments=[confirmation])
-    except Exception:
-        result = await update_menu(context, message.message, text=f"Твой список:\n{answer}\nВерно?", attachments=[confirmation]) # type: ignore
+    result = await message.message.answer(f"Твой список:\n{answer}\nВерно?", attachments=[confirmation])
     print(f"{result} результат <---------")
     await context.set_data({"targets": texts})
 
@@ -119,11 +123,7 @@ async def get_and_wright_targets_in_db_R(callback: MessageCallback, context: Mem
     data = await context.get_data()
     targets = data.get("targets")
     if not targets:
-        await update_menu(context, callback.message, text="Какая то ошибка, попробуй снова:(") # type: ignore
-        try:
-            await callback.message.delete() # type: ignore
-        except Exception:
-            pass
+        await update_menu(context, callback.message, text="Какая то ошибка, попробуй снова:(", attachments=[start_kb]) # type: ignore
         return
     for target in targets:
         await TargetCRUD.create(user_id=callback.from_user.user_id, description=target) # type: ignore
@@ -148,16 +148,6 @@ async def change_targets(callback: MessageCallback, context: MemoryContext):
     items = await TargetCRUD.get_all_target_today(callback.from_user.user_id, datetime.today()) # type: ignore
     if items == []:
         return
-        # Попробуем редактировать существующее сообщение — более плавный UX
-        try:
-            await callback.message.edit(text="Выбери что ты выполнил(а):", attachments=[inline_keyboard_from_items_with_checks(model_groups, initial_checked, "done")]) # type: ignore
-        except Exception:
-            # Фолбек: удаляем и отправляем новое
-            try:
-                await callback.message.delete() # type: ignore
-            except Exception:
-                pass
-            await update_menu(context, callback.message, text="Выбери что ты выполнил(а):", attachments=[inline_keyboard_from_items_with_checks(model_groups, initial_checked, "done")]) # type: ignore
     try:
         await callback.message.edit(text="Выбери что хочешь изменить:", attachments=[inline_keyboard_from_items(items, "item")]) # type: ignore
     except Exception:
@@ -209,7 +199,6 @@ async def cancel_change_targets(callback: MessageCallback, context: MemoryContex
     if not data:
         data = await TargetCRUD.get_all_target_today(user_id=callback.from_user.user_id, day=datetime.today()) # type: ignore
     
-    await callback.message.delete() # type: ignore
     answer = ''
     ind = 1
     if isinstance(data, list):
@@ -262,9 +251,10 @@ async def take_id_and_change(callback: MessageCallback, context: MemoryContext):
 async def add_target(callback: MessageCallback, context: MemoryContext):
     await context.set_state(UserStates.wrighting_targets)
     try:
-        await callback.message.edit(text=f"Введите дополнительные цели", attachments=[cancel_button_kb])
+        sended_message = await callback.message.edit(text=f"Введите дополнительные цели", attachments=[cancel_button_kb])
     except Exception:
         await update_menu(context, callback.message, text=f"Введите дополнительные цели", attachments=[cancel_button_kb])
+    # await context.set_data({"mid": sended_message.__repr_args__})
 
 @user.message_callback(F.callback.payload == "back_delete_target")
 async def delete_target(callback: MessageCallback, context: MemoryContext):
@@ -326,10 +316,6 @@ async def delete_target_callback(callback: MessageCallback, context: MemoryConte
     try:
         await callback.message.edit(text="Выбери что ты хочешь удалить:", attachments=[inline_keyboard_from_items_for_delete(model_groups, pending, "delete")]) # type: ignore
     except Exception:
-        try:
-            await callback.message.delete() # type: ignore
-        except Exception:
-            pass
         await update_menu(context, callback.message, text="Выбери что ты хочешь удалить:", attachments=[inline_keyboard_from_items_for_delete(model_groups, pending, "delete")]) # type: ignore
 
 
@@ -355,10 +341,6 @@ async def commit_delete_handler(callback: MessageCallback, context: MemoryContex
 @user.message_callback(F.callback.payload == "cancel_delete")
 async def cancel_delete_handler(callback: MessageCallback, context: MemoryContext):
     await context.clear()
-    try:
-        await callback.message.delete() # type: ignore
-    except Exception:
-        pass
     try:
         await callback.message.edit(text="Отмена удаления.", attachments=[start_kb]) # type: ignore
     except Exception:
@@ -423,13 +405,12 @@ async def change_target_in_db(message: MessageCreated, context: MemoryContext):
         return
     
     await TargetCRUD.update(target_id=id, description=msg)
-    await context.clear()
-    await update_menu(context, message.message, text="Готово!")
+    await message.message.answer("Готово!")
     items = await TargetCRUD.get_all_target_today(message.from_user.user_id, datetime.today()) # type: ignore
     if items == []:
+        print("На ретерн попали")
         return
-    await message.message.delete() # type: ignore
-    await update_menu(context, message.message, text="Выбери что хочешь изменить:", attachments=[inline_keyboard_from_items(items, "item")]) # type: ignore
+    await message.message.answer("Выбери что хочешь изменить:", attachments=[inline_keyboard_from_items(items, "item")]) # type: ignore
     await context.set_data({"items": items})
 
 # Коммит и отмена для пометки выполненных задач
@@ -484,10 +465,6 @@ async def commit_done_handler(callback: MessageCallback, context: MemoryContext)
 async def cancel_done_handler(callback: MessageCallback, context: MemoryContext):
     # Просто откатываем изменения и убираем временную клавиатуру
     await context.clear()
-    try:
-        await callback.message.delete() # type: ignore
-    except Exception:
-        pass
     await update_menu(context, callback.message, text="Отменено.", attachments=[start_kb]) # type: ignore
 
 @user.message_callback(F.callback.payload == "start_session")
