@@ -8,3 +8,4 @@ class UserStates(StatesGroup):
     wrighting_targets = State()
     change_targets = State()
     counted_time = State()
+    take_time = State()

@@ -45,8 +45,19 @@ def inline_keyboard_from_items(items: List[List[Item]], callback_prefix: str):
 
     return kb.as_markup()
 
+def change_time_activity():
+    kb = InlineKeyboardBuilder()
+    kb.row(CallbackButton(text="Изменить общее время", payload="change_time")) # type: ignore
+    return kb.as_markup()
 
-# === Статические клавиатуры через Builder ===
+change_time_activity_kb = change_time_activity()
+
+def cancel_button():
+    kb = InlineKeyboardBuilder()
+    kb.row(CallbackButton(text="Отмена", payload="cancel_change_target")) # type: ignore
+    return kb.as_markup()
+
+cancel_button_kb = cancel_button()
 
 def create_wright_target_keyboard():
     kb = InlineKeyboardBuilder()

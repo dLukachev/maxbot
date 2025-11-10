@@ -5,12 +5,13 @@ from maxapi.context import MemoryContext
 from sqlalchemy import Sequence
 
 from utils.states import FirstStates, UserStates
-from core.user_handlers.kb import wright_target, confirmation, start_kb, stop_kb, change_target, inline_keyboard_from_items
+from core.user_handlers.kb import wright_target, confirmation, start_kb, stop_kb, change_target, inline_keyboard_from_items, cancel_button_kb, change_time_activity_kb
 from utils.random_text import get_text
 from core.database.requests import UserCRUD, TargetCRUD, SessionCRUD
 from utils.redis import get_redis_async, get_state_r, set_state_r, delete_state_r
 from utils.dates import UTC_PLUS_3, format_total_duration
 from utils.cfg_points import get_levels_config
+from utils.dates import hhmmss_to_seconds
 
 user = Router()
 redis = get_redis_async()
@@ -159,6 +160,7 @@ async def cancel_change_targets(callback: MessageCallback, context: MemoryContex
             for index, item in enumerate(a):
                 answer += f"{ind}. {item.description}\n"
                 ind+=1
+    await context.clear()
     await callback.message.answer(f"Твои цели на сегодня:\n{answer}", attachments=[change_target]) # type: ignore
 
 @user.message_callback(F.callback.payload.startswith("item:"))
@@ -179,7 +181,7 @@ async def take_id_and_change(callback: MessageCallback, context: MemoryContext):
 @user.message_callback(F.callback.payload == "back_add_target")
 async def add_target(callback: MessageCallback, context: MemoryContext):
     await context.set_state(UserStates.wrighting_targets)
-    await callback.message.answer(f"Введите дополнительные цели")
+    await callback.message.answer(f"Введите дополнительные цели", attachments=[cancel_button_kb])
 
 @user.message_callback(F.callback.payload == "back_delete_target")
 async def delete_target(callback: MessageCallback, context: MemoryContext):
@@ -252,8 +254,6 @@ async def change_target_in_db(message: MessageCreated, context: MemoryContext):
     await message.message.delete() # type: ignore
     await message.message.answer("Выбери что хочешь изменить:", attachments=[inline_keyboard_from_items(items, "item")]) # type: ignore
     await context.set_data({"items": items})
-
-# ----------------- TEXT -----------------
 
 @user.message_callback(F.callback.payload == "start_session")
 async def start_going(message: MessageCallback, context: MemoryContext):
@@ -328,7 +328,27 @@ async def get_profile(message: MessageCallback, context: MemoryContext):
         answer += f"Поинтов: {user_data.points} (максимальный уровень достигнут!)\n" # type: ignore
     answer += f"Общее время активности: {format_total_duration(user_data.count_time)}" # type: ignore
 
-    await message.message.answer(answer)
+    await message.message.answer(answer, attachments=[change_time_activity_kb])
+
+@user.message_callback(F.callback.payload == "change_time")
+async def change_sum_time(callback: MessageCallback, context: MemoryContext):
+    await callback.message.delete() # type: ignore
+    await callback.message.answer("Напиши время, которое нужно прибавить в формате чч:мм:сс\n\nЕсли хочешь убавить, то в формате чч:мм:-сс, важно, чтобы '-' был приписан к ненулевому числу, чтобы вычесть ровно минуту, нужно написать 00:-01:00") # type: ignore
+    await context.set_state(UserStates.take_time)
+
+@user.message_created(UserStates.take_time)
+async def get_time(message: MessageCreated, context: MemoryContext):
+
+    text = message.message.body.text
+    time = hhmmss_to_seconds(text) # type: ignore
+    if time == None:
+        await message.message.answer("Какая то ошибка.. Попробуй снова")
+        return
+    res = await UserCRUD.add_duration(message.from_user.user_id, time) # type: ignore
+    if res == None:
+        await message.message.answer("Какая то ошибка.. Попробуй снова")
+        return
+    await message.message.answer("Успешно!")
     
 @user.message_callback(F.callback.payload == "get_targets")
 async def get_targets(message: MessageCreated, context: MemoryContext):
@@ -355,4 +375,4 @@ async def get_targets(message: MessageCreated, context: MemoryContext):
             answer += f"{ind}. {item.description}\n"
             ind+=1
     await message.message.answer(f"Твои цели на сегодня:\n{answer}", attachments=[change_target])
-    await context.set_data({"items", target})
+    await context.set_data({"items": target})
