@@ -52,21 +52,7 @@ async def blocker(message: MessageCreated):
 async def wrt_in_db(callback: MessageCallback, context: MemoryContext):
     current = await context.get_state()
     text = get_text("instructions_for_wrighting")
-
-    if current == "FirstStates:wait_on_click_on_first_button":
-        await context.clear()
-
-    if current == "UserStates:counted_time":
-        await callback.message.answer("Сначала заверши подсчет времени!", attachments=[stop_kb]) # type: ignore
-        await context.set_state(UserStates.counted_time)
-        return
-    else:
-        session = await SessionCRUD.get_active_session(callback.from_user.user_id) # type: ignore
-        if session:
-            await context.set_state(UserStates.counted_time)
-            await callback.message.answer("Сначала заверши подсчет времени!", attachments=[stop_kb]) # type: ignore
-            return
-
+    
     if text and callback.callback.payload == "back_wright_target":
         await callback.message.answer(text) # type: ignore
     elif callback.callback.payload == "back_change_target":
@@ -118,7 +104,16 @@ async def change_targets(callback: MessageCallback, context: MemoryContext):
     items = await TargetCRUD.get_all_target_today(callback.from_user.user_id, datetime.today()) # type: ignore
     if items == []:
         return
-    await callback.message.delete() # type: ignore
+        # Попробуем редактировать существующее сообщение — более плавный UX
+        try:
+            await callback.message.edit(text="Выбери что ты выполнил(а):", attachments=[inline_keyboard_from_items_with_checks(model_groups, initial_checked, "done")]) # type: ignore
+        except Exception:
+            # Фолбек: удаляем и отправляем новое
+            try:
+                await callback.message.delete() # type: ignore
+            except Exception:
+                pass
+            await callback.message.answer("Выбери что ты выполнил(а):", attachments=[inline_keyboard_from_items_with_checks(model_groups, initial_checked, "done")]) # type: ignore
     await callback.message.answer("Выбери что хочешь изменить:", attachments=[inline_keyboard_from_items(items, "item")]) # type: ignore
     await context.set_data({'items': items})
 
@@ -133,7 +128,7 @@ async def make_target_is_done(callback: MessageCallback, context: MemoryContext)
     if items == []:
         return
     # Сохраняем items в context и показываем интерактивную клавиатуру с чекбоксами
-    await callback.message.delete() # type: ignore
+    # Попробуем редактировать текущее сообщение — более плавный UX
     # Инициализируем checked set из БД — уже помеченные задачи должны отображаться как ✅
     initial_checked = set()
     for group in items:
@@ -150,7 +145,10 @@ async def make_target_is_done(callback: MessageCallback, context: MemoryContext)
             row.append(Item(id=t.id, description=t.description))
         model_groups.append(row)
 
-    await callback.message.answer("Выбери что ты выполнил(а):", attachments=[inline_keyboard_from_items_with_checks(model_groups, initial_checked, "done")]) # type: ignore
+    try:
+        await callback.message.edit(text="Выбери что ты выполнил(а):", attachments=[inline_keyboard_from_items_with_checks(model_groups, initial_checked, "done")]) # type: ignore
+    except Exception:
+        await callback.message.answer("Выбери что ты выполнил(а):", attachments=[inline_keyboard_from_items_with_checks(model_groups, initial_checked, "done")]) # type: ignore
     # оставляем состояние прежним (не переключаем стейт)
 
 @user.message_callback(F.callback.payload == "cancel_change_target")
@@ -218,10 +216,13 @@ async def delete_target(callback: MessageCallback, context: MemoryContext):
     for group in items:
         row = []
         for t in group:
-            row.append(Item(id=t.id, description=t.description))
+            row.append(Item(id=t.id, description=t.description, is_done=getattr(t, 'is_done', False)))
         model_groups.append(row)
 
-    await callback.message.answer("Выбери что ты хочешь удалить:", attachments=[inline_keyboard_from_items_for_delete(model_groups, set(), "delete")]) # type: ignore
+    try:
+        await callback.message.edit(text="Выбери что ты хочешь удалить:", attachments=[inline_keyboard_from_items_for_delete(model_groups, set(), "delete")]) # type: ignore
+    except Exception:
+        await callback.message.answer("Выбери что ты хочешь удалить:", attachments=[inline_keyboard_from_items_for_delete(model_groups, set(), "delete")]) # type: ignore
 
 @user.message_callback(F.callback.payload.startswith("delete:"))
 async def delete_target_callback(callback: MessageCallback, context: MemoryContext):
@@ -250,15 +251,17 @@ async def delete_target_callback(callback: MessageCallback, context: MemoryConte
     for group in items:
         row = []
         for t in group:
-            row.append(Item(id=t.id, description=t.description))
+            row.append(Item(id=t.id, description=t.description, is_done=getattr(t, 'is_done', False)))
         model_groups.append(row)
 
     try:
-        await callback.message.delete() # type: ignore
+        await callback.message.edit(text="Выбери что ты хочешь удалить:", attachments=[inline_keyboard_from_items_for_delete(model_groups, pending, "delete")]) # type: ignore
     except Exception:
-        pass
-
-    await callback.message.answer("Выбери что ты хочешь удалить:", attachments=[inline_keyboard_from_items_for_delete(model_groups, pending, "delete")]) # type: ignore
+        try:
+            await callback.message.delete() # type: ignore
+        except Exception:
+            pass
+        await callback.message.answer("Выбери что ты хочешь удалить:", attachments=[inline_keyboard_from_items_for_delete(model_groups, pending, "delete")]) # type: ignore
 
 
 @user.message_callback(F.callback.payload == "commit_delete")

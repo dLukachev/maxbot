@@ -6,9 +6,10 @@ from utils.random_text import get_text
 
 class Item:
     """Модель элемента (цель, задача и т.д.)"""
-    def __init__(self, id: int, description: str):
+    def __init__(self, id: int, description: str, is_done: bool = False):
         self.id = id
         self.description = description
+        self.is_done = is_done
 
 
 def inline_keyboard_from_items(items: List[List[Item]], callback_prefix: str):
@@ -101,9 +102,10 @@ def inline_keyboard_from_items_for_delete(items: List[List[Item]], selected_ids:
     for group in items:
         row = []
         for item in group:
-            mark = "🗑️ " if item.id in selected_ids else "❌ "
+            # If item already done, show ✅ as secondary indicator; selection for deletion overrides marker
+            sel_mark = "🗑️ " if item.id in selected_ids else ("✅ " if getattr(item, 'is_done', False) else "❌ ")
             row.append(
-                CallbackButton(text=f"{mark}{index}. {item.description}", payload=f"{callback_prefix}:{item.id}")
+                CallbackButton(text=f"{sel_mark}{index}. {item.description}", payload=f"{callback_prefix}:{item.id}")
             )
             index += 1
         if row:
