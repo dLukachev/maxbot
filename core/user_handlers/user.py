@@ -600,10 +600,14 @@ async def get_time(message: MessageCreated, context: MemoryContext):
     answer += f"Общее время активности: {format_total_duration(user_data.count_time)}" # type: ignore
 
     # Remove the user's message (they sent the time) so the UI stays clean
+    id_message = message.message.body.mid
     try:
-        await message.message.delete()
-    except Exception:
-        pass
+        print(f"Удаляю сообщение! Айди {id_message}")
+        # result = await message.bot.delete_message(id_message) # type: ignore
+        result = await message.message.delete()
+        print(f"Результат - {result}")
+    except Exception as e:
+        print(f"Ошибка! {e}")
 
     # Show success and the profile under it
     try:
