@@ -145,7 +145,7 @@ async def cancel_change_targets(callback: MessageCallback, context: MemoryContex
         return
     data = await context.get_data()
     if not data:
-        data = await TargetCRUD.get_all_target_today(user_id=callback.from_user.user_id, day=datetime.today())
+        data = await TargetCRUD.get_all_target_today(user_id=callback.from_user.user_id, day=datetime.today()) # type: ignore
     
     await callback.message.delete() # type: ignore
     answer = ''
@@ -156,7 +156,7 @@ async def cancel_change_targets(callback: MessageCallback, context: MemoryContex
                 answer += f"{ind}. {j.description}\n"
                 ind+=1
     else:
-        for a in data.get("items", []):
+        for a in data.get("items", []): # pyright: ignore[reportAttributeAccessIssue]
             for index, item in enumerate(a):
                 answer += f"{ind}. {item.description}\n"
                 ind+=1
@@ -187,7 +187,7 @@ async def add_target(callback: MessageCallback, context: MemoryContext):
 async def delete_target(callback: MessageCallback, context: MemoryContext):
     data = await context.get_data()
     if not data:
-        data = await TargetCRUD.get_all_target_today(user_id=callback.from_user.user_id, day=datetime.today())
+        data = await TargetCRUD.get_all_target_today(user_id=callback.from_user.user_id, day=datetime.today()) # type: ignore
     answer=''
     ind=1
     print("-------------")
@@ -198,7 +198,7 @@ async def delete_target(callback: MessageCallback, context: MemoryContext):
                 answer += f"{ind}. {j.description}\n"
                 ind+=1
     else:
-        for a in data.get("items", []):
+        for a in data.get("items", []): # pyright: ignore[reportAttributeAccessIssue]
             for index, item in enumerate(a):
                 answer += f"{ind}. {item.description}\n"
                 ind+=1
@@ -206,11 +206,11 @@ async def delete_target(callback: MessageCallback, context: MemoryContext):
 
 @user.message_callback(F.callback.payload.startswith("delete:"))
 async def delete_target_callback(callback: MessageCallback, context: MemoryContext):
-    target_id = callback.callback.payload.split(":")[1]
+    target_id = callback.callback.payload.split(":")[1] # type: ignore
     if not target_id:
         await callback.message.answer("Не вижу такой задачи:(")
         return
-    result = await TargetCRUD.delete(target_id)
+    result = await TargetCRUD.delete(int(target_id))
     await callback.message.answer(f"Удалил таску") if result else await callback.message.answer(f"Ошибка удаления:((()))")
 
 @user.message_callback(F.callback.payload.startswith("done:"))
