@@ -5,7 +5,20 @@ from maxapi.context import MemoryContext
 from sqlalchemy import Sequence
 
 from utils.states import FirstStates, UserStates
-from core.user_handlers.kb import wright_target, confirmation, start_kb, stop_kb, change_target, inline_keyboard_from_items, cancel_button_kb, change_time_activity_kb, Item, inline_keyboard_from_items_for_delete
+from core.user_handlers.kb import (
+    wright_target,
+    confirmation,
+    start_kb,
+    stop_kb,
+    change_target,
+    inline_keyboard_from_items,
+    inline_keyboard_from_items_with_checks,
+    cancel_button_kb,
+    change_time_activity_kb,
+    Item,
+    inline_keyboard_from_items_for_delete,
+)
+
 from utils.random_text import get_text
 from utils.message_utils import update_menu
 from core.database.requests import UserCRUD, TargetCRUD, SessionCRUD
@@ -19,7 +32,7 @@ redis = get_redis_async()
 
 @user.dialog_cleared()
 async def handle_dialog_cleared(event: DialogCleared, context: MemoryContext):
-    await event.bot.send_message(chat_id=event.chat_id, user_id=event.user.user_id, text="Меню:", attachments=[start_kb])
+    await event.bot.send_message(chat_id=event.chat_id, user_id=event.user.user_id, text="Меню:", attachments=[start_kb]) # type: ignore
 
 # ----------------- COMMANDS -----------------
 
@@ -378,14 +391,13 @@ async def take_id_and_change_isdone(callback: MessageCallback, context: MemoryCo
             row.append(Item(id=t.id, description=t.description))
         model_groups.append(row)
 
-    # Edit message: replace keyboard (maxapi may not support edit_message_reply_markup directly, so send a new message and delete the previous)
-    # We'll delete the callback message and send a fresh one with updated keyboard for simplicity.
+    # Update message: prefer editing the existing callback message to replace the keyboard.
+    # Do NOT delete the message — just edit its text/attachments in place.
     try:
-        await callback.message.delete() # type: ignore
+        await callback.message.edit(text="Выбери что ты выполнил(а):", attachments=[inline_keyboard_from_items_with_checks(model_groups, pending, "done")]) # type: ignore
     except Exception:
-        pass
-
-    await update_menu(context, callback.message, text="Выбери что ты выполнил(а):", attachments=[inline_keyboard_from_items_with_checks(model_groups, pending, "done")]) # type: ignore
+        # fallback to creating/updating the persistent menu when edit is not available
+        await update_menu(context, callback.message, text="Выбери что ты выполнил(а):", attachments=[inline_keyboard_from_items_with_checks(model_groups, pending, "done")]) # type: ignore
 
 @user.message_created(UserStates.change_targets)
 async def change_target_in_db(message: MessageCreated, context: MemoryContext):
