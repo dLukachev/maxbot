@@ -121,6 +121,8 @@ def inline_keyboard_from_items_for_delete(items: List[List[Item]], selected_ids:
 def change_time_activity():
     kb = InlineKeyboardBuilder()
     kb.row(CallbackButton(text="Изменить общее время", payload="change_time")) # type: ignore
+    # Добавляем кнопку Отмена, чтобы можно было вернуться в главное меню
+    kb.row(CallbackButton(text="Отмена", payload="back_to_menu")) # type: ignore
     return kb.as_markup()
 
 change_time_activity_kb = change_time_activity()
@@ -135,6 +137,8 @@ cancel_button_kb = cancel_button()
 def create_wright_target_keyboard():
     kb = InlineKeyboardBuilder()
     kb.row(CallbackButton(text=get_text('wright_target'), payload="back_wright_target")) # type: ignore
+    # кнопка отмены возвращает на уровень выше (в главное меню)
+    kb.row(CallbackButton(text="Отмена", payload="back_to_menu")) # type: ignore
     return kb.as_markup()
 
 wright_target = create_wright_target_keyboard()
@@ -146,6 +150,8 @@ def create_change_target_keyboard():
     kb.row(CallbackButton(text="Изменить цели", payload="back_change_target"))
     kb.row(CallbackButton(text="Удалить", payload="back_delete_target"))
     kb.row(CallbackButton(text="Отметить выполненное", payload="target_is_done"))
+    # Добавляем Отмена, чтобы вернуться в главное меню
+    kb.row(CallbackButton(text="Отмена", payload="back_to_menu"))
     return kb.as_markup()
 
 change_target = create_change_target_keyboard()
@@ -155,6 +161,8 @@ def create_confirmation_keyboard():
     kb = InlineKeyboardBuilder()
     kb.row(CallbackButton(text="Да", payload="right"))
     kb.row(CallbackButton(text="Нет", payload="not_right"))
+    # Отмена — возврат в главное меню
+    kb.row(CallbackButton(text="Отмена", payload="back_to_menu"))
     return kb.as_markup()
 
 confirmation = create_confirmation_keyboard()
