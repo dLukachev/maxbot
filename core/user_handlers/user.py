@@ -365,7 +365,7 @@ async def get_targets(message: MessageCreated, context: MemoryContext):
     
     target = await TargetCRUD.get_all_target_today(message.from_user.user_id, datetime.today()) # type: ignore
     if target == []:
-        await message.message.answer("Почему то не вижу твоих целей на сегодня(\nВозможно ты их просто не написал(а)..(в общем где-то моя ошибка)\nМожешь это сделать прямо сейчас!")
+        await message.message.answer("Почему то не вижу твоих целей на сегодня(\nВозможно ты их просто не написал(а)..(в общем где-то моя ошибка)\n\nНапиши их прямо сейчас, ловлю!")
         await context.set_state(UserStates.wrighting_targets)
         return
     answer = ''

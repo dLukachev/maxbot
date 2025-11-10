@@ -4,6 +4,7 @@ import logging
 
 from core.user_handlers.user import user
 from core.database.models import async_main
+from utils.sheduler import setup_midnight_messages
 
 from maxapi import Bot, Dispatcher
 from dotenv import load_dotenv
@@ -16,6 +17,7 @@ bot = Bot(token)
 dp = Dispatcher()
 
 async def main():
+    scheduler = setup_midnight_messages(bot)
     await dp.start_polling(bot)
 
 async def init():
