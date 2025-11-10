@@ -85,6 +85,37 @@ def inline_keyboard_from_items_with_checks(items: List[List[Item]], checked_ids:
 
     return kb.as_markup()
 
+
+def inline_keyboard_from_items_for_delete(items: List[List[Item]], selected_ids: set[int], callback_prefix: str):
+    """
+    Построить inline-клавиатуру для выбора на удаление. Показывает '🗑️' для выбранных и '❌' для не выбранных.
+    Внизу добавляет кнопки "Удалить" (commit_delete) и "Отмена" (cancel_delete).
+    """
+    kb = InlineKeyboardBuilder()
+
+    if not items:
+        kb.row(CallbackButton(text="Ошибка!", payload="ERROR"))
+        return kb.as_markup()
+
+    index = 1
+    for group in items:
+        row = []
+        for item in group:
+            mark = "🗑️ " if item.id in selected_ids else "❌ "
+            row.append(
+                CallbackButton(text=f"{mark}{index}. {item.description}", payload=f"{callback_prefix}:{item.id}")
+            )
+            index += 1
+        if row:
+            kb.row(*row)
+
+    kb.row(
+        CallbackButton(text="Удалить", payload="commit_delete"),
+        CallbackButton(text="Отмена", payload="cancel_delete")
+    )
+
+    return kb.as_markup()
+
 def change_time_activity():
     kb = InlineKeyboardBuilder()
     kb.row(CallbackButton(text="Изменить общее время", payload="change_time")) # type: ignore

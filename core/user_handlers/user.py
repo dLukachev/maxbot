@@ -5,7 +5,7 @@ from maxapi.context import MemoryContext
 from sqlalchemy import Sequence
 
 from utils.states import FirstStates, UserStates
-from core.user_handlers.kb import wright_target, confirmation, start_kb, stop_kb, change_target, inline_keyboard_from_items, cancel_button_kb, change_time_activity_kb, Item
+from core.user_handlers.kb import wright_target, confirmation, start_kb, stop_kb, change_target, inline_keyboard_from_items, cancel_button_kb, change_time_activity_kb, Item, inline_keyboard_from_items_for_delete
 from utils.random_text import get_text
 from core.database.requests import UserCRUD, TargetCRUD, SessionCRUD
 from utils.redis import get_redis_async, get_state_r, set_state_r, delete_state_r
@@ -204,33 +204,87 @@ async def add_target(callback: MessageCallback, context: MemoryContext):
 
 @user.message_callback(F.callback.payload == "back_delete_target")
 async def delete_target(callback: MessageCallback, context: MemoryContext):
-    data = await context.get_data()
-    if not data:
-        data = await TargetCRUD.get_all_target_today(user_id=callback.from_user.user_id, day=datetime.today()) # type: ignore
-    answer=''
-    ind=1
-    print("-------------")
-    print(data)
-    if isinstance(data, list):
-        for i in data:
-            for j in i:
-                answer += f"{ind}. {j.description}\n"
-                ind+=1
-    else:
-        for a in data.get("items", []): # pyright: ignore[reportAttributeAccessIssue]
-            for index, item in enumerate(a):
-                answer += f"{ind}. {item.description}\n"
-                ind+=1
-    await callback.message.answer("Выбери что ты хочешь удалить:", attachments=[inline_keyboard_from_items(data, "delete")]) # type: ignore
+    # Показать клавиатуру для выбора задач на удаление
+    items = await TargetCRUD.get_all_target_today(user_id=callback.from_user.user_id, day=datetime.today()) # type: ignore
+    if not items:
+        await callback.message.answer("Нет задач для удаления.")
+        return
+
+    # Сохраняем items и пустой pending_delete в context
+    await context.set_data({'items': items, 'pending_delete': []})
+
+    # Построим model groups
+    model_groups = []
+    for group in items:
+        row = []
+        for t in group:
+            row.append(Item(id=t.id, description=t.description))
+        model_groups.append(row)
+
+    await callback.message.answer("Выбери что ты хочешь удалить:", attachments=[inline_keyboard_from_items_for_delete(model_groups, set(), "delete")]) # type: ignore
 
 @user.message_callback(F.callback.payload.startswith("delete:"))
 async def delete_target_callback(callback: MessageCallback, context: MemoryContext):
-    target_id = callback.callback.payload.split(":")[1] # type: ignore
-    if not target_id:
+    # Toggle selection for deletion and update keyboard
+    payload = callback.callback.payload
+    if not payload:
         await callback.message.answer("Не вижу такой задачи:(")
         return
-    result = await TargetCRUD.delete(int(target_id))
-    await callback.message.answer(f"Удалил таску") if result else await callback.message.answer(f"Ошибка удаления:((()))")
+    target_id = int(payload.split(":")[1])
+
+    data = await context.get_data() or {}
+    items = data.get('items')
+    if not items:
+        items = await TargetCRUD.get_all_target_today(user_id=callback.from_user.user_id, day=datetime.today()) # type: ignore
+
+    pending = set(data.get('pending_delete', []))
+    if target_id in pending:
+        pending.remove(target_id)
+    else:
+        pending.add(target_id)
+
+    await context.set_data({'items': items, 'pending_delete': list(pending)})
+
+    # rebuild keyboard
+    model_groups = []
+    for group in items:
+        row = []
+        for t in group:
+            row.append(Item(id=t.id, description=t.description))
+        model_groups.append(row)
+
+    try:
+        await callback.message.delete() # type: ignore
+    except Exception:
+        pass
+
+    await callback.message.answer("Выбери что ты хочешь удалить:", attachments=[inline_keyboard_from_items_for_delete(model_groups, pending, "delete")]) # type: ignore
+
+
+@user.message_callback(F.callback.payload == "commit_delete")
+async def commit_delete_handler(callback: MessageCallback, context: MemoryContext):
+    data = await context.get_data() or {}
+    pending = list(data.get('pending_delete', []))
+    items = data.get('items', [])
+    if not pending:
+        await callback.message.answer("Нечего удалять.")
+        await context.clear()
+        return
+
+    # Выполнить bulk delete
+    deleted = await TargetCRUD.bulk_delete(pending) # type: ignore
+    await callback.message.answer(f"Удалено задач: {deleted}", attachments=[start_kb]) # type: ignore
+    await context.clear()
+
+
+@user.message_callback(F.callback.payload == "cancel_delete")
+async def cancel_delete_handler(callback: MessageCallback, context: MemoryContext):
+    await context.clear()
+    try:
+        await callback.message.delete() # type: ignore
+    except Exception:
+        pass
+    await callback.message.answer("Отмена удаления.", attachments=[start_kb]) # type: ignore
 
 @user.message_callback(F.callback.payload.startswith("done:"))
 async def take_id_and_change_isdone(callback: MessageCallback, context: MemoryContext):

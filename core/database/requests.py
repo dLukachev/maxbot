@@ -252,6 +252,24 @@ class TargetCRUD:
             await session.execute(delete(Target).where(Target.id == target_id))
             await session.commit()
             return True
+
+    @staticmethod
+    async def bulk_delete(target_ids: list[int]) -> int:
+        """
+        Удаляет все Target с id в списке target_ids.
+        Возвращает количество удалённых записей.
+        """
+        if not target_ids:
+            return 0
+        async with async_session() as session:
+            res = await session.execute(select(Target.id).where(Target.id.in_(target_ids)))
+            existing = [r[0] for r in res.all()]
+            if not existing:
+                return 0
+            result = await session.execute(delete(Target).where(Target.id.in_(existing)))
+            await session.commit()
+            # result.rowcount may not be reliable on some DBs; return len(existing)
+            return len(existing)
     
     @staticmethod
     async def get_all_target_today(user_id: int, day: date):
