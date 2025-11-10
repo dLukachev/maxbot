@@ -558,8 +558,16 @@ async def get_profile(message: MessageCallback, context: MemoryContext):
 
 @user.message_callback(F.callback.payload == "change_time")
 async def change_sum_time(callback: MessageCallback, context: MemoryContext):
-    await callback.message.delete() # type: ignore
-    await update_menu(context, callback.message, text="Напиши время, которое нужно прибавить в формате чч:мм:сс\n\nЕсли хочешь убавить, то в формате чч:мм:-сс, важно, чтобы '-' был приписан к ненулевому числу, чтобы вычесть ровно минуту, нужно написать 00:-01:00") # type: ignore
+    # Prefer editing the existing callback message to show the prompt.
+    # Do not delete the message; only edit its text/attachments. Fallback to update_menu if edit not supported.
+    prompt = (
+        "Напиши время, которое нужно прибавить в формате чч:мм:сс\n\n"
+        "Если хочешь убавить, то в формате чч:мм:-сс, важно, чтобы '-' был приписан к ненулевому числу, чтобы вычесть ровно минуту, нужно написать 00:-01:00"
+    )
+    try:
+        await callback.message.edit(text=prompt) # type: ignore
+    except Exception:
+        await update_menu(context, callback.message, text=prompt) # type: ignore
     await context.set_state(UserStates.take_time)
 
 @user.message_created(UserStates.take_time)
@@ -567,14 +575,43 @@ async def get_time(message: MessageCreated, context: MemoryContext):
 
     text = message.message.body.text
     time = hhmmss_to_seconds(text) # type: ignore
-    if time == None:
+    if time is None:
         await update_menu(context, message.message, text="Какая то ошибка.. Попробуй снова")
         return
     res = await UserCRUD.add_duration(message.from_user.user_id, time) # type: ignore
-    if res == None:
+    if res is None:
         await update_menu(context, message.message, text="Какая то ошибка.. Попробуй снова")
         return
-    await update_menu(context, message.message, text="Успешно!")
+
+    # Build profile text (same as in get_profile) and show it under the "Успешно!" header.
+    user_data = await UserCRUD.get_by_tid(message.from_user.user_id) # type: ignore
+    next_level = None
+    lp = get_levels_config()
+    for i in sorted(lp.keys(), key=int):
+        if int(user_data.points) < int(i): # type: ignore
+            next_level = int(i)
+            break
+
+    answer = f"{user_data.name}, {user_data.level} уровень.\n" # type: ignore
+    if next_level is not None:
+        answer += f"Поинтов: {user_data.points}, до следующего уровня {next_level - int(user_data.points)}\n" # type: ignore
+    else:
+        answer += f"Поинтов: {user_data.points} (максимальный уровень достигнут!)\n" # type: ignore
+    answer += f"Общее время активности: {format_total_duration(user_data.count_time)}" # type: ignore
+
+    # Remove the user's message (they sent the time) so the UI stays clean
+    try:
+        await message.message.delete()
+    except Exception:
+        pass
+
+    # Show success and the profile under it
+    try:
+        await update_menu(context, message.message, text=f"Успешно!\n\n{answer}", attachments=[change_time_activity_kb])
+    except Exception:
+        await update_menu(context, message.message, text=f"Успешно!\n\n{answer}")
+
+    await context.clear()
     
 @user.message_callback(F.callback.payload == "get_targets")
 async def get_targets(message: MessageCreated, context: MemoryContext):
