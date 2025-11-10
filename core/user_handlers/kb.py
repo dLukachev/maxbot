@@ -58,7 +58,9 @@ wright_target = create_wright_target_keyboard()
 
 def create_change_target_keyboard():
     kb = InlineKeyboardBuilder()
+    kb.row(CallbackButton(text="Добавить", payload="back_add_target"))
     kb.row(CallbackButton(text="Изменить цели", payload="back_change_target"))
+    kb.row(CallbackButton(text="Удалить", payload="back_delete_target"))
     kb.row(CallbackButton(text="Отметить выполненное", payload="target_is_done"))
     return kb.as_markup()
 

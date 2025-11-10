@@ -2,6 +2,7 @@ from datetime import datetime
 from maxapi import Router, F
 from maxapi.types import MessageCreated, MessageCallback, Command
 from maxapi.context import MemoryContext
+from sqlalchemy import Sequence
 
 from utils.states import FirstStates, UserStates
 from core.user_handlers.kb import wright_target, confirmation, start_kb, stop_kb, change_target, inline_keyboard_from_items
@@ -148,11 +149,16 @@ async def cancel_change_targets(callback: MessageCallback, context: MemoryContex
     await callback.message.delete() # type: ignore
     answer = ''
     ind = 1
-    # 
-    for a in data.get("items", []):
-        for index, item in enumerate(a):
-            answer += f"{ind}. {item.description}\n"
-            ind+=1
+    if isinstance(data, list):
+        for i in data:
+            for j in i:
+                answer += f"{ind}. {j.description}\n"
+                ind+=1
+    else:
+        for a in data.get("items", []):
+            for index, item in enumerate(a):
+                answer += f"{ind}. {item.description}\n"
+                ind+=1
     await callback.message.answer(f"Твои цели на сегодня:\n{answer}", attachments=[change_target]) # type: ignore
 
 @user.message_callback(F.callback.payload.startswith("item:"))
@@ -160,7 +166,6 @@ async def take_id_and_change(callback: MessageCallback, context: MemoryContext):
     user_state = await context.get_state()
     if user_state == "UserStates:counted_time":
         await callback.message.answer("Сначала заверши подсчет времени!", attachments=[stop_kb]) # type: ignore
-        
         return
     id = callback.callback.payload
     if not id:
@@ -170,6 +175,41 @@ async def take_id_and_change(callback: MessageCallback, context: MemoryContext):
     await context.set_data({"target_id": id})
     await callback.message.answer("Напиши цель снова и я ее изменю (тут можно запятые кста)") # type: ignore
     await context.set_state(UserStates.change_targets)
+
+@user.message_callback(F.callback.payload == "back_add_target")
+async def add_target(callback: MessageCallback, context: MemoryContext):
+    await context.set_state(UserStates.wrighting_targets)
+    await callback.message.answer(f"Введите дополнительные цели")
+
+@user.message_callback(F.callback.payload == "back_delete_target")
+async def delete_target(callback: MessageCallback, context: MemoryContext):
+    data = await context.get_data()
+    if not data:
+        data = await TargetCRUD.get_all_target_today(user_id=callback.from_user.user_id, day=datetime.today())
+    answer=''
+    ind=1
+    print("-------------")
+    print(data)
+    if isinstance(data, list):
+        for i in data:
+            for j in i:
+                answer += f"{ind}. {j.description}\n"
+                ind+=1
+    else:
+        for a in data.get("items", []):
+            for index, item in enumerate(a):
+                answer += f"{ind}. {item.description}\n"
+                ind+=1
+    await callback.message.answer("Выбери что ты хочешь удалить:", attachments=[inline_keyboard_from_items(data, "delete")]) # type: ignore
+
+@user.message_callback(F.callback.payload.startswith("delete:"))
+async def delete_target_callback(callback: MessageCallback, context: MemoryContext):
+    target_id = callback.callback.payload.split(":")[1]
+    if not target_id:
+        await callback.message.answer("Не вижу такой задачи:(")
+        return
+    result = await TargetCRUD.delete(target_id)
+    await callback.message.answer(f"Удалил таску") if result else await callback.message.answer(f"Ошибка удаления:((()))")
 
 @user.message_callback(F.callback.payload.startswith("done:"))
 async def take_id_and_change_isdone(callback: MessageCallback, context: MemoryContext):
@@ -315,5 +355,4 @@ async def get_targets(message: MessageCreated, context: MemoryContext):
             answer += f"{ind}. {item.description}\n"
             ind+=1
     await message.message.answer(f"Твои цели на сегодня:\n{answer}", attachments=[change_target])
-
-    
+    await context.set_data({"items", target})
