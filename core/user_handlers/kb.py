@@ -172,6 +172,12 @@ def create_confirmation_keyboard():
 
 confirmation = create_confirmation_keyboard()
 
+def back_to_main_menue_button_in_help():
+    kb = InlineKeyboardBuilder()
+    kb.row(CallbackButton(text="Назад", payload="back_to_menu"))
+    return kb.as_markup()
+
+button_in_help = back_to_main_menue_button_in_help()
 
 # === Reply-клавиатуры ===
 
