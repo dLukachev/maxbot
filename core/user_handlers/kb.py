@@ -134,6 +134,13 @@ def cancel_button():
 
 cancel_button_kb = cancel_button()
 
+def first_create_wright_target_keyboard():
+    kb = InlineKeyboardBuilder()
+    kb.row(CallbackButton(text=get_text('wright_target'), payload="back_wright_target")) # type: ignore
+    return kb.as_markup()
+
+first_wright_target = first_create_wright_target_keyboard()
+
 def create_wright_target_keyboard():
     kb = InlineKeyboardBuilder()
     kb.row(CallbackButton(text=get_text('wright_target'), payload="back_wright_target")) # type: ignore
