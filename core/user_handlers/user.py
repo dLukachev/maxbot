@@ -24,6 +24,8 @@ from core.user_handlers.kb import (
     inline_keyboard_from_items_with_checks,
     cancel_button_kb,
     change_time_activity_kb,
+    keyboard_for_change_sum_time_kb,
+    keyboard_for_get_targets_kb,
     Item,
     inline_keyboard_from_items_for_delete,
 )
@@ -553,9 +555,9 @@ async def change_sum_time(callback: MessageCallback, context: MemoryContext):
         "Если хочешь убавить, то в формате чч:мм:-сс, важно, чтобы '-' был приписан к ненулевому числу, чтобы вычесть ровно минуту, нужно написать 00:-01:00"
     )
     try:
-        await callback.message.edit(text=prompt) # type: ignore
+        await callback.message.edit(text=prompt, attachments=[keyboard_for_change_sum_time_kb]) # type: ignore
     except Exception:
-        await update_menu(context, callback.message, text=prompt) # type: ignore
+        await update_menu(context, callback.message, text=prompt, attachments=[keyboard_for_change_sum_time_kb]) # type: ignore
     await context.set_state(UserStates.take_time)
 
 @user.message_created(UserStates.take_time)
@@ -620,7 +622,7 @@ async def get_targets(message: MessageCreated, context: MemoryContext):
     
     target = await TargetCRUD.get_all_target_today(message.from_user.user_id, datetime.today()) # type: ignore
     if target == []:
-        await update_menu(context, message.message, text="Почему то не вижу твоих целей на сегодня(\nВозможно ты их просто не написал(а)..(в общем где-то моя ошибка)\n\nНапиши их прямо сейчас, ловлю!")
+        await update_menu(context, message.message, text="Почему то не вижу твоих целей на сегодня(\nВозможно ты их просто не написал(а)..(в общем где-то моя ошибка)\n\nНапиши их прямо сейчас, ловлю!", attachments=[keyboard_for_get_targets_kb])
         await context.set_state(UserStates.wrighting_targets)
         return
     answer = ''
