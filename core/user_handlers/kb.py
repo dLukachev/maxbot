@@ -134,13 +134,6 @@ def keyboard_for_change_sum_time():
 
 keyboard_for_change_sum_time_kb = keyboard_for_change_sum_time()
 
-def keyboard_for_get_targets():
-    kb = InlineKeyboardBuilder()
-    kb.row(CallbackButton(text="Назад", payload="back_to_menu"))
-    return kb.as_markup()
-
-keyboard_for_get_targets_kb = keyboard_for_get_targets()
-
 def cancel_button():
     kb = InlineKeyboardBuilder()
     kb.row(CallbackButton(text="Назад", payload="cancel_change_target")) # type: ignore

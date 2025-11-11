@@ -25,7 +25,6 @@ from core.user_handlers.kb import (
     cancel_button_kb,
     change_time_activity_kb,
     keyboard_for_change_sum_time_kb,
-    keyboard_for_get_targets_kb,
     Item,
     inline_keyboard_from_items_for_delete,
 )
@@ -622,7 +621,7 @@ async def get_targets(message: MessageCreated, context: MemoryContext):
     
     target = await TargetCRUD.get_all_target_today(message.from_user.user_id, datetime.today()) # type: ignore
     if target == []:
-        await update_menu(context, message.message, text="Почему то не вижу твоих целей на сегодня(\nВозможно ты их просто не написал(а)..(в общем где-то моя ошибка)\n\nНапиши их прямо сейчас, ловлю!", attachments=[keyboard_for_get_targets_kb])
+        await update_menu(context, message.message, text="Почему то не вижу твоих целей на сегодня(\nВозможно ты их просто не написал(а)..(в общем где-то моя ошибка)\n\nНапиши их прямо сейчас, ловлю!")
         await context.set_state(UserStates.wrighting_targets)
         return
     answer = ''
