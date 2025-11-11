@@ -23,12 +23,12 @@ def setup_midnight_messages(bot):
 
             while len(users) == 100:
                 users = list(await UserCRUD.list(offset=101))
-                message = "Вот и закончился день, начался новый, пора ставить цели!"
                 sent_count = 0
                 for user in users:
                     try:
-                        # Асинхронная отправка сообщения
-                        await bot.send_message(user_id=user.tid, text=message, attachments=[wright_target])
+                        # TODO: пора оценивать прошедший день, нужно поменять месседж, и клавиатуру,
+                        # TODO: плюс хендлер, чтобы хавать эти действия
+                        await bot.send_message(user_id=user.tid, text="Вот и закончился день, начался новый, пора ставить цели!", attachments=[wright_target])
                         sent_count += 1
                     except Exception as e:
                         print(f"❌ Ошибка отправки пользователю {user.tid}: {e}")
@@ -38,17 +38,14 @@ def setup_midnight_messages(bot):
         except Exception as e:
             print(f"❌ Критическая ошибка в рассылке: {e}")
     
-    # Создаем асинхронный планировщик
     scheduler = AsyncIOScheduler()
     
-    # Добавляем асинхронную задачу (каждый день в 00:00)
     scheduler.add_job(
         send_midnight_messages,
         trigger=CronTrigger(hour=00, minute=00),
         id='midnight_messages'
     )
     
-    # Запускаем планировщик
     scheduler.start()
     
     print("⏰ Асинхронная рассылка в 00:00 настроена!")

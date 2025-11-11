@@ -381,7 +381,6 @@ async def take_id_and_change_isdone(callback: MessageCallback, context: MemoryCo
 
     await context.set_data({'items': items, 'pending_done': list(pending)})
 
-    # Rebuild keyboard with updated checks and edit the message
     model_groups = []
     for group in items:
         row = []
@@ -389,8 +388,6 @@ async def take_id_and_change_isdone(callback: MessageCallback, context: MemoryCo
             row.append(Item(id=t.id, description=t.description))
         model_groups.append(row)
 
-    # Update message: prefer editing the existing callback message to replace the keyboard.
-    # Do NOT delete the message — just edit its text/attachments in place.
     try:
         await callback.message.edit(text="Выбери что ты выполнил(а):", attachments=[inline_keyboard_from_items_with_checks(model_groups, pending, "done")]) # type: ignore
     except Exception:
@@ -405,7 +402,7 @@ async def change_target_in_db(message: MessageCreated, context: MemoryContext):
         await context.clear()
         return
     id = await context.get_data()
-    id = id.get("target_id", "")
+    id = id.get("target_id", 0)
     if id == "":
         await update_menu(context, message.message, text="Ошибка! Хз почему, но айди таски не увидел(") # type: ignore
         await context.clear()
@@ -639,3 +636,6 @@ async def get_targets(message: MessageCreated, context: MemoryContext):
             ind+=1
     await update_menu(context, message.message, text=f"Твои цели на сегодня:\n{answer}", attachments=[change_target])
     await context.set_data({"items": target})
+
+# TODO: хендлер для обработки результата дня по целям, а потом перенос на постановку
+# TODO: новых целей
