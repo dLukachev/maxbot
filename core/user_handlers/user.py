@@ -24,7 +24,7 @@ from core.user_handlers.kb import (
     inline_keyboard_from_items_with_checks,
     cancel_button_kb,
     change_time_activity_kb,
-    first_wright_target,
+    keyboard_for_change_sum_time_kb,
     Item,
     inline_keyboard_from_items_for_delete,
 )
@@ -41,27 +41,41 @@ user = Router()
 redis = get_redis_async()
 
 @user.dialog_cleared()
-async def handle_dialog_cleared(event: DialogCleared):
+async def handle_dialog_cleared(event: DialogCleared, context: MemoryContext):
+    check = await UserCRUD.get_by_tid(event.from_user.user_id)
+    if not check:
+        await UserCRUD.create(tid=event.from_user.user_id, name=event.from_user.first_name, username=event.from_user.username)
     await event.bot.send_message(chat_id=event.chat_id, user_id=event.user.user_id, text="Меню:", attachments=[start_kb]) # type: ignore
 
 @user.bot_started()
-async def handle_bot_starterd(event: BotStarted, context: MemoryContext):
+async def handle_bot_starterd(event: BotStarted):
+    check = await UserCRUD.get_by_tid(event.from_user.user_id)
+    if not check:
+        await UserCRUD.create(tid=event.from_user.user_id, name=event.from_user.first_name, username=event.from_user.username)
+    await event.bot.send_message(chat_id=event.chat_id, user_id=event.user.user_id, text="Меню:", attachments=[start_kb]) # type: ignore
+
+# ----------------- COMMANDS -----------------
+
+# Приветственное сообщение, сразу после него кидаем на написание целей, естественно
+# после нажатия на кнопку
+@user.message_created(Command("start"))
+async def send_info(message: MessageCreated, context: MemoryContext):
     # смотрим есть ли такой юзер в бд
-    checking = await UserCRUD.get_by_tid(event.from_user.user_id) # pyright: ignore[reportOptionalMemberAccess]
+    checking = await UserCRUD.get_by_tid(message.from_user.user_id) # pyright: ignore[reportOptionalMemberAccess]
     # если нет, то создаем и идем по сценарию нового пользователя
     if not checking:
-        await UserCRUD.create(tid=event.from_user.user_id, name=event.from_user.first_name, username=event.from_user.username) # pyright: ignore[reportOptionalMemberAccess]
-        first_name = getattr(event.from_user, 'first_name', '')
+        await UserCRUD.create(tid=message.from_user.user_id, name=message.from_user.first_name, username=message.from_user.username) # pyright: ignore[reportOptionalMemberAccess]
+        first_name = getattr(message.from_user, 'first_name', '')
         text = (
             f"Привет, {first_name}! Ты попал куда надо.\n"
             "Смысл этого бота в том, чтобы помочь тебе не забывать кратковременные цели и отслеживать их выполнение, а так же напоминать об отдыхе)"
         )
         prompt = "А пока напиши свою цель(и):"
-        await event.bot.send_message(chat_id=event.chat_id, user_id=event.user.user_id, text=f"{text}\n\n{prompt}", attachments=[first_wright_target])
+        await update_menu(context, message.message, text=f"{text}\n\n{prompt}", attachments=[wright_target])
         await context.set_state(FirstStates.wait_on_click_on_first_button)
     # иначе показываем ему текущий интерфейс исходя из его состояния
     else:
-        await event.bot.send_message(chat_id=event.chat_id, user_id=event.user.user_id, text="Меню:", attachments=[start_kb]) # type: ignore
+        await update_menu(context, message.message, text="Главное меню:", attachments=[start_kb])
 
 @user.message_created(F.text, FirstStates.wait_on_click_on_first_button)
 async def blocker(message: MessageCreated):
@@ -69,6 +83,8 @@ async def blocker(message: MessageCreated):
     потом это нигде не используется
     """
     pass
+
+# ----------------- CALLBACK -----------------
 
 @user.message_callback(F.callback.payload.in_({"back_wright_target", "not_right"}))
 async def wrt_in_db(callback: MessageCallback, context: MemoryContext):
@@ -544,9 +560,9 @@ async def change_sum_time(callback: MessageCallback, context: MemoryContext):
         "Если хочешь убавить, то в формате чч:мм:-сс, важно, чтобы '-' был приписан к ненулевому числу, чтобы вычесть ровно минуту, нужно написать 00:-01:00"
     )
     try:
-        await callback.message.edit(text=prompt) # type: ignore
+        await callback.message.edit(text=prompt, attachments=[keyboard_for_change_sum_time_kb]) # type: ignore
     except Exception:
-        await update_menu(context, callback.message, text=prompt) # type: ignore
+        await update_menu(context, callback.message, text=prompt, attachments=[keyboard_for_change_sum_time_kb]) # type: ignore
     await context.set_state(UserStates.take_time)
 
 @user.message_created(UserStates.take_time)
