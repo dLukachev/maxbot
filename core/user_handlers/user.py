@@ -41,11 +41,17 @@ user = Router()
 redis = get_redis_async()
 
 @user.dialog_cleared()
-async def handle_dialog_cleared(event: DialogCleared):
+async def handle_dialog_cleared(event: DialogCleared, context: MemoryContext):
+    check = await UserCRUD.get_by_tid(event.from_user.user_id)
+    if not check:
+        await UserCRUD.create(tid=event.from_user.user_id, name=event.from_user.first_name, username=event.from_user.username)
     await event.bot.send_message(chat_id=event.chat_id, user_id=event.user.user_id, text="Меню:", attachments=[start_kb]) # type: ignore
 
 @user.bot_started()
 async def handle_bot_starterd(event: BotStarted):
+    check = await UserCRUD.get_by_tid(event.from_user.user_id)
+    if not check:
+        await UserCRUD.create(tid=event.from_user.user_id, name=event.from_user.first_name, username=event.from_user.username)
     await event.bot.send_message(chat_id=event.chat_id, user_id=event.user.user_id, text="Меню:", attachments=[start_kb]) # type: ignore
 
 # ----------------- COMMANDS -----------------
