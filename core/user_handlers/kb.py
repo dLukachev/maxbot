@@ -3,14 +3,12 @@ from maxapi.types import CallbackButton, ChatButton  # Только эти им�
 from maxapi.utils.inline_keyboard import InlineKeyboardBuilder
 from utils.random_text import get_text
 
-
 class Item:
     """Модель элемента (цель, задача и т.д.)"""
     def __init__(self, id: int, description: str, is_done: bool = False):
         self.id = id
         self.description = description
         self.is_done = is_done
-
 
 def inline_keyboard_from_items(items: List[List[Item]], callback_prefix: str):
     """
@@ -43,9 +41,7 @@ def inline_keyboard_from_items(items: List[List[Item]], callback_prefix: str):
 
     # Кнопка "Отмена"
     kb.row(CallbackButton(text="Назад", payload="cancel_change_target"))
-
     return kb.as_markup()
-
 
 def inline_keyboard_from_items_with_checks(items: List[List[Item]], checked_ids: set[int], callback_prefix: str):
     """
@@ -83,9 +79,7 @@ def inline_keyboard_from_items_with_checks(items: List[List[Item]], checked_ids:
         CallbackButton(text="Готово", payload="commit_done"),
         CallbackButton(text="Назад", payload="cancel_change_target")
     )
-
     return kb.as_markup()
-
 
 def inline_keyboard_from_items_for_delete(items: List[List[Item]], selected_ids: set[int], callback_prefix: str):
     """
@@ -157,7 +151,6 @@ def create_wright_target_keyboard():
 
 wright_target = create_wright_target_keyboard()
 
-
 def create_change_target_keyboard():
     kb = InlineKeyboardBuilder()
     kb.row(CallbackButton(text="Добавить", payload="back_add_target"))
@@ -170,7 +163,6 @@ def create_change_target_keyboard():
 
 change_target = create_change_target_keyboard()
 
-
 def create_confirmation_keyboard():
     kb = InlineKeyboardBuilder()
     kb.row(CallbackButton(text="Да", payload="right"))
@@ -178,9 +170,6 @@ def create_confirmation_keyboard():
     return kb.as_markup()
 
 confirmation = create_confirmation_keyboard()
-
-
-# === Reply-клавиатуры ===
 
 def create_start_keyboard():
     """Основная стартовая клавиатура."""
@@ -205,3 +194,7 @@ def create_stop_keyboard():
     return kb.as_markup()
 
 stop_kb = create_stop_keyboard()
+
+
+# Клавиатура для выбора стиля отдыха, типа помидор (25/5), есть еще какие-то, нужно погуглить
+# и выбрать стили, выбрать так же без уведомлялок
