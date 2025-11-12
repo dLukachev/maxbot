@@ -2,6 +2,7 @@ from datetime import datetime
 from maxapi import Router, F
 from maxapi.types import MessageCreated, MessageCallback, Command, DialogCleared, BotStarted
 from maxapi.context import MemoryContext
+from sqlalchemy import Sequence
 import logging
 
 logging.basicConfig(
@@ -14,6 +15,7 @@ logging.basicConfig(
 
 from utils.states import FirstStates, UserStates
 from core.user_handlers.kb import (
+    button_in_help,
     wright_target,
     confirmation,
     start_kb,
@@ -66,42 +68,17 @@ async def handle_bot_starterd(event: BotStarted):
 
 # ----------------- COMMANDS -----------------
 
-# Приветственное сообщение, сразу после него кидаем на написание целей, естественно
-# после нажатия на кнопку
-@user.message_created(Command("start"))
-async def send_info(message: MessageCreated, context: MemoryContext):
-    # смотрим есть ли такой юзер в бд
-    checking = await UserCRUD.get_by_tid(message.from_user.user_id) # pyright: ignore[reportOptionalMemberAccess]
-    # если нет, то создаем и идем по сценарию нового пользователя
-    if not checking:
-        await UserCRUD.create(tid=message.from_user.user_id, name=message.from_user.first_name, username=message.from_user.username) # pyright: ignore[reportOptionalMemberAccess]
-        first_name = getattr(message.from_user, 'first_name', '')
-        text = (
-            f"Привет, {first_name}! Ты попал куда надо.\n"
-            "Смысл этого бота в том, чтобы помочь тебе не забывать кратковременные цели и отслеживать их выполнение, а так же напоминать об отдыхе)"
-        )
-        prompt = "А пока напиши свою цель(и):"
-        await update_menu(context, message.message, text=f"{text}\n\n{prompt}", attachments=[wright_target])
-        await context.set_state(FirstStates.wait_on_click_on_first_button)
-    # иначе показываем ему текущий интерфейс исходя из его состояния
-    else:
-        await update_menu(context, message.message, text="Главное меню:", attachments=[start_kb])
+@user.message_created(Command("help"))
+async def help(message: MessageCreated, context: MemoryContext):
+    #await update_menu(context, message.message, text="привет")
+    await message.message.answer("help text", attachments=[button_in_help])
 
-@user.message_created(F.text, FirstStates.wait_on_click_on_first_button)
-async def blocker(message: MessageCreated):
-    """Блокируем любые текстовые сообщения на момент FirstStates.wait_on_click_on_first_button, 
-    потом это нигде не используется
-    """
-    pass
-
-# ----------------- CALLBACK -----------------
 
 @user.message_callback(F.callback.payload.in_({"back_wright_target", "not_right"}))
 @look_if_not_target
 async def wrt_in_db(callback: MessageCallback, context: MemoryContext):
     current = await context.get_state()
     text = get_text("instructions_for_wrighting")
-    
     if text and callback.callback.payload == "back_wright_target":
         try:
             await callback.message.edit(text=text) # type: ignore
@@ -408,10 +385,10 @@ async def take_id_and_change_isdone(callback: MessageCallback, context: MemoryCo
         model_groups.append(row)
 
     try:
-        await callback.message.edit(text="Выбери что ты выполнил(а) nf:", attachments=[inline_keyboard_from_items_with_checks(model_groups, pending, "done")]) # type: ignore
+        await callback.message.edit(text="Выбери что ты выполнил(а):", attachments=[inline_keyboard_from_items_with_checks(model_groups, pending, "done")]) # type: ignore
     except Exception:
         # fallback to creating/updating the persistent menu when edit is not available
-        await update_menu(context, callback.message, text="Выбери что ты выполнил(а) nf:", attachments=[inline_keyboard_from_items_with_checks(model_groups, pending, "done")]) # type: ignore
+        await update_menu(context, callback.message, text="Выбери что ты выполнил(а):", attachments=[inline_keyboard_from_items_with_checks(model_groups, pending, "done")]) # type: ignore
 
 @user.message_created(UserStates.change_targets)
 @look_if_not_target
@@ -422,7 +399,7 @@ async def change_target_in_db(message: MessageCreated, context: MemoryContext):
         await context.clear()
         return
     id = await context.get_data()
-    id = id.get("target_id", 0)
+    id = id.get("target_id", "")
     if id == "":
         await update_menu(context, message.message, text="Ошибка! Хз почему, но айди таски не увидел(") # type: ignore
         await context.clear()
@@ -432,6 +409,7 @@ async def change_target_in_db(message: MessageCreated, context: MemoryContext):
     await message.message.answer("Готово!")
     items = await TargetCRUD.get_all_target_today(message.from_user.user_id, datetime.today()) # type: ignore
     if items == []:
+        print("На ретерн попали")
         return
     await message.message.answer("Выбери что хочешь изменить:", attachments=[inline_keyboard_from_items(items, "item")]) # type: ignore
     await context.set_data({"items": items})
@@ -540,20 +518,7 @@ async def stop_going(message: MessageCallback, context: MemoryContext):
     await update_menu(context, message.message, text=f"Добавлено: `{h:02d}:{m:02d}:{s:02d}`", attachments=[start_kb])
 
 
-@user.message_callback(F.callback.payload == "get_profile")
-@look_if_not_target
-async def get_profile(message: MessageCallback, context: MemoryContext):
-    user_state = await context.get_state()
-    if user_state == "UserStates:counted_time":
-        await update_menu(context, message.message, text="Сначала заверши подсчет времени!", attachments=[stop_kb])
-        return
-    else:
-        session = await SessionCRUD.get_active_session(message.from_user.user_id) # type: ignore
-        if session:
-            await context.set_state(UserStates.counted_time)
-            await update_menu(context, message.message, text="Сначала заверши подсчет времени!", attachments=[stop_kb])
-            return
-    
+async def draw_profile(message: MessageCallback, context:MemoryContext):
     user_data = await UserCRUD.get_by_tid(message.from_user.user_id) # type: ignore
     next_level = None
     # Находим минимальный порог, который больше текущих поинтов пользователя
@@ -571,6 +536,22 @@ async def get_profile(message: MessageCallback, context: MemoryContext):
     answer += f"Общее время активности: {format_total_duration(user_data.count_time)}" # type: ignore
 
     await update_menu(context, message.message, text=answer, attachments=[change_time_activity_kb])
+
+@user.message_callback(F.callback.payload == "get_profile")
+@look_if_not_target
+async def get_profile(message: MessageCallback, context: MemoryContext):
+    user_state = await context.get_state()
+    if user_state == "UserStates:counted_time":
+        await update_menu(context, message.message, text="Сначала заверши подсчет времени!", attachments=[stop_kb])
+        return
+    else:
+        session = await SessionCRUD.get_active_session(message.from_user.user_id) # type: ignore
+        if session:
+            await context.set_state(UserStates.counted_time)
+            await update_menu(context, message.message, text="Сначала заверши подсчет времени!", attachments=[stop_kb])
+            return
+
+    await draw_profile(message, context)
 
 @user.message_callback(F.callback.payload == "change_time")
 @look_if_not_target

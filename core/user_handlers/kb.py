@@ -3,12 +3,14 @@ from maxapi.types import CallbackButton, ChatButton  # Только эти им�
 from maxapi.utils.inline_keyboard import InlineKeyboardBuilder
 from utils.random_text import get_text
 
+
 class Item:
     """Модель элемента (цель, задача и т.д.)"""
     def __init__(self, id: int, description: str, is_done: bool = False):
         self.id = id
         self.description = description
         self.is_done = is_done
+
 
 def inline_keyboard_from_items(items: List[List[Item]], callback_prefix: str):
     """
@@ -41,7 +43,9 @@ def inline_keyboard_from_items(items: List[List[Item]], callback_prefix: str):
 
     # Кнопка "Отмена"
     kb.row(CallbackButton(text="Назад", payload="cancel_change_target"))
+
     return kb.as_markup()
+
 
 def inline_keyboard_from_items_with_checks(items: List[List[Item]], checked_ids: set[int], callback_prefix: str):
     """
@@ -79,7 +83,9 @@ def inline_keyboard_from_items_with_checks(items: List[List[Item]], checked_ids:
         CallbackButton(text="Готово", payload="commit_done"),
         CallbackButton(text="Назад", payload="cancel_change_target")
     )
+
     return kb.as_markup()
+
 
 def inline_keyboard_from_items_for_delete(items: List[List[Item]], selected_ids: set[int], callback_prefix: str):
     """
@@ -135,13 +141,6 @@ def cancel_button():
 
 cancel_button_kb = cancel_button()
 
-def first_create_wright_target_keyboard():
-    kb = InlineKeyboardBuilder()
-    kb.row(CallbackButton(text=get_text('wright_target'), payload="back_wright_target")) # type: ignore
-    return kb.as_markup()
-
-first_wright_target = first_create_wright_target_keyboard()
-
 def create_wright_target_keyboard():
     kb = InlineKeyboardBuilder()
     kb.row(CallbackButton(text=get_text('wright_target'), payload="back_wright_target")) # type: ignore
@@ -150,6 +149,7 @@ def create_wright_target_keyboard():
     return kb.as_markup()
 
 wright_target = create_wright_target_keyboard()
+
 
 def create_change_target_keyboard():
     kb = InlineKeyboardBuilder()
@@ -163,6 +163,7 @@ def create_change_target_keyboard():
 
 change_target = create_change_target_keyboard()
 
+
 def create_confirmation_keyboard():
     kb = InlineKeyboardBuilder()
     kb.row(CallbackButton(text="Да", payload="right"))
@@ -170,6 +171,13 @@ def create_confirmation_keyboard():
     return kb.as_markup()
 
 confirmation = create_confirmation_keyboard()
+
+def back_to_main_menue_button_in_help():
+    kb = InlineKeyboardBuilder()
+    kb.row(CallbackButton(text="Назад", payload="back_to_menu"))
+    return kb.as_markup()
+
+button_in_help = back_to_main_menue_button_in_help()
 
 def create_confirmation_keyboard_finally():
     kb = InlineKeyboardBuilder()
@@ -201,62 +209,3 @@ def create_stop_keyboard():
     return kb.as_markup()
 
 stop_kb = create_stop_keyboard()
-
-
-def checking_done_target():
-    kb = InlineKeyboardBuilder()
-    kb.row(
-        CallbackButton(text="Отметить выполненное", payload="target_is_done_finally"),
-        CallbackButton(text="Готово", payload="day_is_done_finally")
-    )
-    return kb.as_markup()
-
-checking_done_target_kb = checking_done_target()
-
-
-def inline_keyboard_from_items_with_checks_finally(items: List[List[Item]], checked_ids: set[int], callback_prefix: str):
-    """
-    Построить inline-клавиатуру где у каждой кнопки есть чекбокс, отражающий checked_ids.
-    checked_ids: set of target.id, отмеченные как выбранные (готовые).
-    callback_prefix: префикс для payload — например 'done' или 'select'.
-    Внизу добавляем кнопки Готово (commit) и Отмена (cancel_done).
-    """
-    kb = InlineKeyboardBuilder()
-
-    if not items:
-        kb.row(
-            CallbackButton(text="Ошибка!", payload="ERROR")
-        )
-        return kb.as_markup()
-
-    index = 1
-    for group in items:
-        row = []
-        for item in group:
-            # use ✅ for done and ❌ for not done
-            checked = "✅ " if item.id in checked_ids else "❌ "
-            row.append(
-                CallbackButton(
-                    text=f"{checked}{index}. {item.description}",
-                    payload=f"{callback_prefix}:{item.id}"
-                )
-            )
-            index += 1
-        if row:
-            kb.row(*row)
-
-    kb.row(
-        CallbackButton(text="Готово1", payload="commit_finally_done"),
-        CallbackButton(text="Назад1", payload="cancel_change_finally_target")
-    )
-    return kb.as_markup()
-
-def create_new_target():
-    kb = InlineKeyboardBuilder()
-    kb.row(CallbackButton(text="Газ!!!", payload="create_new_target"))
-    return kb.as_markup()
-
-create_new_target_kb = create_new_target()
-
-# TODO: Клавиатура для выбора стиля отдыха, типа помидор (25/5), есть еще какие-то, нужно погуглить
-# TODO: и выбрать стили, выбрать так же без уведомлялок

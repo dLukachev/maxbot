@@ -10,3 +10,4 @@ class UserStates(StatesGroup):
     counted_time = State()
     take_time = State()
     new_day = State()
+    help_state = State()
