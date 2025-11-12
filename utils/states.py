@@ -9,3 +9,4 @@ class UserStates(StatesGroup):
     change_targets = State()
     counted_time = State()
     take_time = State()
+    new_day = State()

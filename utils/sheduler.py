@@ -2,11 +2,11 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from datetime import datetime
 
-from redis.commands.search.reducers import count
-
 from core.database.requests import UserCRUD
 from utils.dates import UTC_PLUS_3
 from core.user_handlers.kb import wright_target
+from utils.close_activity import stop_one_sessions
+from core.user_handlers.kb import checking_done_target_kb
 
 def setup_midnight_messages(bot):
     """
@@ -20,20 +20,25 @@ def setup_midnight_messages(bot):
             
             # Асинхронно получаем список пользователей
             users = list(await UserCRUD.list())
-
-            while len(users) == 100:
-                users = list(await UserCRUD.list(offset=101))
+            next_users = 101
+            while len(users) > 0:
                 sent_count = 0
                 for user in users:
                     try:
                         # TODO: пора оценивать прошедший день, нужно поменять месседж, и клавиатуру,
                         # TODO: плюс хендлер, чтобы хавать эти действия
-                        await bot.send_message(user_id=user.tid, text="Вот и закончился день, начался новый, пора ставить цели!", attachments=[wright_target])
+                        await stop_one_sessions(bot, user.tid)
+                        await bot.send_message(user_id=user.tid, text="Вот и закончился день, начался новый, пора отмечать что сделал, а что нет!", attachments=[checking_done_target_kb])
                         sent_count += 1
                     except Exception as e:
                         print(f"❌ Ошибка отправки пользователю {user.tid}: {e}")
-            
-                print(f"✅ Рассылка завершена. Успешно отправлено: {sent_count}/{len(users)}")
+                if len(users) == 100:
+                    users = list(await UserCRUD.list(offset=next_users))
+                    next_users += 100
+                    print(f"✅ Рассылка завершена. Успешно отправлено: {sent_count}/{len(users)}")
+                else:
+                    print(f"✅ Рассылка завершена. Успешно отправлено: {sent_count}/{len(users)}")
+                    break
             
         except Exception as e:
             print(f"❌ Критическая ошибка в рассылке: {e}")
@@ -42,7 +47,7 @@ def setup_midnight_messages(bot):
     
     scheduler.add_job(
         send_midnight_messages,
-        trigger=CronTrigger(hour=00, minute=00),
+        trigger=CronTrigger(hour=23, minute=35),
         id='midnight_messages'
     )
     
