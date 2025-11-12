@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from maxapi import Router, F
 from maxapi.types import MessageCreated, MessageCallback, Command, DialogCleared, BotStarted
 from maxapi.context import MemoryContext
@@ -25,7 +25,8 @@ from core.user_handlers.kb import (
     inline_keyboard_from_items_with_checks,
     cancel_button_kb,
     change_time_activity_kb,
-    keyboard_for_change_sum_time_kb,
+    back_to_profile_kb,
+    create_profile_targets_keyboard,
     Item,
     inline_keyboard_from_items_for_delete,
 )
@@ -36,7 +37,7 @@ from core.database.requests import UserCRUD, TargetCRUD, SessionCRUD
 from utils.redis import get_redis_async, get_state_r, set_state_r, delete_state_r
 from utils.dates import UTC_PLUS_3, format_total_duration
 from utils.cfg_points import get_levels_config
-from utils.dates import hhmmss_to_seconds
+from utils.dates import hhmmss_to_seconds, UTC_PLUS_3, format_total_duration, format_duration
 
 user = Router()
 redis = get_redis_async()
@@ -451,22 +452,59 @@ async def cancel_done_handler(callback: MessageCallback, context: MemoryContext)
     await update_menu(context, callback.message, text="Отменено.", attachments=[start_kb]) # type: ignore
 
 @user.message_callback(F.callback.payload == "start_session")
-async def start_going(message: MessageCallback, context: MemoryContext):
+async def start_session_choose_target(message: MessageCallback, context: MemoryContext):
     user_state = await context.get_state()
-    if user_state == "UserStates:counted_time": # type: ignore
+    if user_state == "UserStates:counted_time":
         await update_menu(context, message.message, text="У тебя уже открыта сессия...", attachments=[stop_kb])
-        await context.set_state(UserStates.counted_time)
-        # await set_state_r(redis, message.from_user.user_id, 'go') # type: ignore
         return
-    else:
-        session = await SessionCRUD.get_active_session(message.from_user.user_id) # type: ignore
-        if not session:
-            now = datetime.now(UTC_PLUS_3)
-            await SessionCRUD.create(user_id=message.from_user.user_id, date_start=now, date_end=now, is_active=True) # type: ignore
-            # await set_state_r(redis, message.from_user.user_id, 'go') # type: ignore
-            await context.set_state(UserStates.counted_time)
-            await update_menu(context, message.message, text=f"Фиксирую старт... {now.strftime('%m-%d %H:%M:%S')}", attachments=[stop_kb])
 
+    # 1. Получаем цели на сегодня
+    targets_raw = await TargetCRUD.get_all_target_today(message.from_user.user_id, datetime.today()) # type: ignore
+    
+    # Распаковываем вложенный список
+    targets = [item for sublist in targets_raw for item in sublist]
+
+    if not targets:
+        await update_menu(context, message.message, text="Сначала нужно добавить цели на сегодня. Нажмите 'Цели 🧠'", attachments=[start_kb])
+        return
+
+    # 2. Показываем клавиатуру для выбора
+    # Конвертируем цели в формат для клавиатурыƒ
+    items_for_kb = [[Item(id=t.id, description=t.description) for t in targets]]
+
+    await update_menu(
+        context, 
+        message.message, 
+        text="Выбери цель, над которой начинаешь работать:", 
+        attachments=[inline_keyboard_from_items(items_for_kb, "start_target")]
+    )
+    await context.set_state(UserStates.choosing_target_for_session)
+
+@user.message_callback(F.callback.payload.startswith("start_target:"), UserStates.choosing_target_for_session)
+async def start_going(callback: MessageCallback, context: MemoryContext):
+    target_id_str = callback.callback.payload.split(":")[1]
+    if not target_id_str.isdigit():
+        await update_menu(context, callback.message, text="Ошибка! Неверный ID цели.", attachments=[start_kb])
+        await context.clear()
+        return
+    
+    target_id = int(target_id_str)
+    
+    session = await SessionCRUD.get_active_session(callback.from_user.user_id)
+    if session:
+        await update_menu(context, callback.message, text="У тебя уже открыта сессия...", attachments=[stop_kb])
+        return
+
+    now = datetime.now(UTC_PLUS_3)
+    await SessionCRUD.create(
+        user_id=callback.from_user.user_id,
+        target_id=target_id,
+        date_start=now, 
+        date_end=now, 
+        is_active=True
+    )
+    await context.set_state(UserStates.counted_time)
+    await update_menu(context, callback.message, text=f"Фиксирую старт... {now.strftime('%H:%M:%S')}", attachments=[stop_kb])
 
 @user.message_callback(F.callback.payload == "stop_session", UserStates.counted_time)
 async def stop_going(message: MessageCallback, context: MemoryContext):
@@ -475,45 +513,61 @@ async def stop_going(message: MessageCallback, context: MemoryContext):
     now = datetime.now(UTC_PLUS_3)
     now = now.replace(tzinfo=None)
 
-    session = await SessionCRUD.get_active_session(message.from_user.user_id) # type: ignore
+    session = await SessionCRUD.get_active_session(message.from_user.user_id)
     if not session:
-        await update_menu(context, message.message, text="Ошибка! Не вижу сессии%()", attachments=[start_kb])
+        await update_menu(context, message.message, text="Ошибка! Не вижу активной сессии.", attachments=[start_kb])
+        return
 
-    await SessionCRUD.update(session_id=session.id, date_end=now, is_active=False) # type: ignore
+    await SessionCRUD.update(session_id=session.id, date_end=now, is_active=False)
         
-    # суммируем в профиле пользователя
-    elapsed = now - session.date_start # type: ignore
-    await UserCRUD.add_duration(message.from_user.user_id, elapsed) # type: ignore
+    elapsed = now - session.date_start
+    await UserCRUD.add_duration(message.from_user.user_id, elapsed)
 
-    # удаляем запись стейта (временно откл)
-    # await delete_state_r(redis, message.from_user.user_id) # type: ignore
-
-    # красиво выводим
-    total_seconds = int(elapsed.total_seconds())
-    h = total_seconds // 3600
-    m = (total_seconds % 3600) // 60
-    s = total_seconds % 60
-    await update_menu(context, message.message, text=f"Добавлено: `{h:02d}:{m:02d}:{s:02d}`", attachments=[start_kb])
+    elapsed_str = format_duration(elapsed)
+    await update_menu(context, message.message, text=f"Сессия завершена. Добавлено: `{elapsed_str}`", attachments=[start_kb])
 
 
 async def draw_profile(message: MessageCallback, context:MemoryContext):
-    user_data = await UserCRUD.get_by_tid(message.from_user.user_id) # type: ignore
+    user_data = await UserCRUD.get_by_tid(message.from_user.user_id)
+
+    today = datetime.now(UTC_PLUS_3).date()
+
+    time_today = await SessionCRUD.total_active_time_on_date(user_data.tid, today)
+    time_week = await SessionCRUD.get_total_time_for_week(user_data.tid, today)
+
     next_level = None
-    # Находим минимальный порог, который больше текущих поинтов пользователя
+
     lp = get_levels_config()
     for i in sorted(lp.keys(), key=int):
-        if int(user_data.points) < int(i): # type: ignore
+        if int(user_data.points) < int(i):
             next_level = int(i)
             break
-    
-    answer = f"{user_data.name}, {user_data.level} уровень.\n" # type: ignore
-    if next_level is not None:
-        answer += f"Поинтов: {user_data.points}, до следующего уровня {next_level - int(user_data.points)}\n" # type: ignore
-    else:
-        answer += f"Поинтов: {user_data.points} (максимальный уровень достигнут!)\n" # type: ignore
-    answer += f"Общее время активности: {format_total_duration(user_data.count_time)}" # type: ignore
 
-    await update_menu(context, message.message, text=answer, attachments=[change_time_activity_kb])
+    answer = (
+        f"👤 *{user_data.name}, {user_data.level} уровень*\n"
+        f"📈 Поинтов: {user_data.points}, до следующего уровня {next_level - int(user_data.points)}\n\n"
+        f"⏱️ *Активность:*\n"
+        f"За сегодня: *{format_duration(time_today)}*\n"
+        f"За неделю: *{format_duration(time_week)}*\n"
+        f"Всего: *{format_total_duration(user_data.count_time)}*\n\n"
+        f"🎯 *Время по целям:*"
+    )
+    
+    targets_raw = await TargetCRUD.list_by_user(user_data.tid)
+
+    targets_with_time = []
+    for target in targets_raw:
+        target_time = await SessionCRUD.get_total_time_for_target(target.id)
+        targets_with_time.append((target, format_duration(target_time)))
+
+    profile_kb = create_profile_targets_keyboard(targets_with_time)
+    user_state = await context.get_state()
+    print(user_state)
+    if str(user_state) == "UserStates:draw_new_prifile":
+        await message.message.answer(text=answer, attachments=[profile_kb])
+        context.clear()
+    else:
+        await update_menu(context, message.message, text=answer, attachments=[profile_kb])
 
 @user.message_callback(F.callback.payload == "get_profile")
 async def get_profile(message: MessageCallback, context: MemoryContext):
@@ -527,21 +581,79 @@ async def get_profile(message: MessageCallback, context: MemoryContext):
             await context.set_state(UserStates.counted_time)
             await update_menu(context, message.message, text="Сначала заверши подсчет времени!", attachments=[stop_kb])
             return
-    
     await draw_profile(message, context)
+
+@user.message_callback(F.callback.payload.startswith("adjust_time:"))
+async def adjust_target_time_start(callback: MessageCallback, context: MemoryContext):
+    target_id_str = callback.callback.payload.split(":")[1]
+    if not target_id_str.isdigit():
+        return
+    
+    target_id = int(target_id_str)
+    target = await TargetCRUD.get_by_id(target_id)
+    if not target:
+        await callback.answer("Цель не найдена!")
+        return
+
+    await context.set_data({"adjust_target_id": target_id})
+    await context.set_state(UserStates.adjusting_target_time)
+    
+    prompt = (
+        f"Введите время для добавления к цели:\n"
+        f"*{target.description}*\n\n"
+        f"Формат: `чч:мм:сс`. Для вычитания используйте минус, например `-00:10:00`."
+    )
+
+    await update_menu(context, callback.message, text=prompt, attachments=[back_to_profile_kb])
+
+@user.message_created(UserStates.adjusting_target_time)
+async def adjust_target_time_finish(message: MessageCreated, context: MemoryContext):
+    data = await context.get_data()
+    target_id = data.get("adjust_target_id")
+    if not target_id:
+        await context.clear()
+        return
+
+    text_time = message.message.body.text
+    seconds = hhmmss_to_seconds(text_time)
+
+    if seconds is None:
+        await message.message.answer("Неверный формат времени. Попробуйте еще раз (чч:мм:сс).")
+        return
+
+    now = datetime.now(UTC_PLUS_3)
+    duration = timedelta(seconds=seconds)
+
+    user_updated = await UserCRUD.add_duration(message.from_user.user_id, duration)
+    if not user_updated:
+        await update_menu(context, message.message, text="Ошибка! Не удалось обновить профиль.", attachments=[start_kb])
+        await context.clear()
+        return
+        
+    await SessionCRUD.create(
+        user_id=user_updated.tid,
+        target_id=target_id,
+        date_start=now,
+        date_end=now + duration,
+        is_active=False
+    )
+    
+    await context.clear()
+    await message.message.answer("Время успешно обновлено!")
+    
+    await context.set_state(UserStates.draw_new_prifile)
+    await get_profile(message, context)
 
 @user.message_callback(F.callback.payload == "change_time")
 async def change_sum_time(callback: MessageCallback, context: MemoryContext):
-    # Prefer editing the existing callback message to show the prompt.
-    # Do not delete the message; only edit its text/attachments. Fallback to update_menu if edit not supported.
     prompt = (
         "Напиши время, которое нужно прибавить в формате чч:мм:сс\n\n"
         "Если хочешь убавить, то в формате чч:мм:-сс, важно, чтобы '-' был приписан к ненулевому числу, чтобы вычесть ровно минуту, нужно написать 00:-01:00"
     )
     try:
-        await callback.message.edit(text=prompt, attachments=[keyboard_for_change_sum_time_kb]) # type: ignore
+        await callback.message.edit(text=prompt, attachments=[back_to_profile_kb]) # type: ignore
     except Exception:
-        await update_menu(context, callback.message, text=prompt, attachments=[keyboard_for_change_sum_time_kb]) # type: ignore
+        await update_menu(context, callback.message, text=prompt, attachments=[back_to_profile_kb]) # type: ignore
     await context.set_state(UserStates.take_time)
 
 @user.message_created(UserStates.take_time)

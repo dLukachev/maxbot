@@ -13,12 +13,6 @@ class Item:
 
 
 def inline_keyboard_from_items(items: List[List[Item]], callback_prefix: str):
-    """
-    Динамическая inline-клавиатура из списка items.
-    - items: List[List[Item]] — группы кнопок по строкам
-    - callback_prefix: префикс для callback_data (например, 'select')
-    Добавляет кнопку "Отмена" внизу.
-    """
     kb = InlineKeyboardBuilder()
 
     if not items:
@@ -31,18 +25,12 @@ def inline_keyboard_from_items(items: List[List[Item]], callback_prefix: str):
     for group in items:
         row = []
         for item in group:
-            row.append(
-                CallbackButton(
+            kb.row(CallbackButton(
                     text=f"{index}. {item.description}",
                     payload=f"{callback_prefix}:{item.id}"
-                )
-            )
-            index += 1
-        if row:
-            kb.row(*row)
-
-    # Кнопка "Отмена"
-    kb.row(CallbackButton(text="Назад", payload="cancel_change_target"))
+                ))
+            
+    kb.row(CallbackButton(text="Назад", payload="back_to_menu"))
 
     return kb.as_markup()
 
@@ -118,6 +106,28 @@ def inline_keyboard_from_items_for_delete(items: List[List[Item]], selected_ids:
 
     return kb.as_markup()
 
+def create_profile_targets_keyboard(targets_with_time: list):
+    """
+    Создает клавиатуру со списком целей и временем, потраченным на них.
+    - targets_with_time: список кортежей/объектов вида (target, time_str)
+    """
+    kb = InlineKeyboardBuilder()
+    if not targets_with_time:
+        kb.row(CallbackButton(text="У вас пока нет целей (Добавить)", payload="get_targets"))
+    else:
+        for target, time_str in targets_with_time:
+            kb.row(
+                CallbackButton(
+                    text=f"🎯 {target.description[:25]}... ({time_str})", # Обрезаем длинные названия
+                    payload=f"adjust_time:{target.id}"
+                )
+            )
+
+    kb.row(CallbackButton(text="Назад", payload="back_to_menu"))
+
+    return kb.as_markup()
+
+
 def change_time_activity():
     kb = InlineKeyboardBuilder()
     kb.row(CallbackButton(text="Изменить общее время", payload="change_time")) # type: ignore
@@ -127,12 +137,12 @@ def change_time_activity():
 
 change_time_activity_kb = change_time_activity()
 
-def keyboard_for_change_sum_time():
+def back_to_profile_handler():
     kb = InlineKeyboardBuilder()
     kb.row(CallbackButton(text="Назад", payload="get_profile"))
     return kb.as_markup()
 
-keyboard_for_change_sum_time_kb = keyboard_for_change_sum_time()
+back_to_profile_kb = back_to_profile_handler()
 
 def cancel_button():
     kb = InlineKeyboardBuilder()

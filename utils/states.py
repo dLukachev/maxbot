@@ -10,3 +10,6 @@ class UserStates(StatesGroup):
     counted_time = State()
     take_time = State()
     help_state = State()
+    choosing_target_for_session = State()
+    adjusting_target_time = State()
+    draw_new_prifile = State()

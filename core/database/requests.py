@@ -289,9 +289,9 @@ class TargetCRUD:
 # ---------- Sessions ----------
 class SessionCRUD:
     @staticmethod
-    async def create(*, user_id: int, date_start: datetime, date_end: datetime, is_active: bool = False) -> Session:
+    async def create(*, user_id: int, target_id: int, date_start: datetime, date_end: datetime, is_active: bool = False) -> Session:
         async with async_session() as session:
-            obj = Session(user_id=user_id, date_start=date_start, date_end=date_end, is_active=is_active)
+            obj = Session(user_id=user_id, target_id=target_id, date_start=date_start, date_end=date_end, is_active=is_active)
             session.add(obj)
             await session.commit()
             await session.refresh(obj)
@@ -318,11 +318,13 @@ class SessionCRUD:
         date_start: Optional[datetime] = None,
         date_end: Optional[datetime] = None,
         is_active: Optional[bool] = None,
+        target_id: Optional[int] = None,
     ) -> Optional[Session]:
         values = {}
         if date_start is not None: values["date_start"] = date_start
         if date_end is not None: values["date_end"] = date_end
         if is_active is not None: values["is_active"] = is_active
+        if target_id is not None: values["target_id"] = target_id
 
         async with async_session() as session:
             if values:
@@ -395,6 +397,50 @@ class SessionCRUD:
             if end > start:
                 total += (end - start)
 
+        return total
+    
+    @staticmethod
+    async def get_total_time_for_week(user_id: int, today: date) -> timedelta:
+        """
+        Возвращает суммарное активное время за текущую неделю (с понедельника по сегодня).
+        """
+        start_of_week = today - timedelta(days=today.weekday()) # Понедельник
+        end_of_week = start_of_week + timedelta(days=7) # Следующий понедельник
+
+        async with async_session() as session:
+            res = await session.execute(
+                select(Session).where(
+                    and_(
+                        Session.user_id == user_id,
+                        Session.date_start < end_of_week,
+                        Session.date_end >= start_of_week,
+                    )
+                )
+            )
+            sessions: Sequence["Session"] = res.scalars().all()
+
+        total = timedelta(0)
+        for s in sessions:
+            start: datetime = max(s.date_start, datetime.combine(start_of_week, time.min)) # type: ignore
+            end: datetime = min(s.date_end, datetime.combine(end_of_week, time.min)) # type: ignore
+            if end > start:
+                total += (end - start)
+        return total
+    
+    @staticmethod
+    async def get_total_time_for_target(target_id: int) -> timedelta:
+        """Возвращает суммарное время по всем сессиям для одной цели."""
+        async with async_session() as session:
+            res = await session.execute(
+                select(Session).where(Session.target_id == target_id)
+            )
+            sessions: Sequence["Session"] = res.scalars().all()
+
+        total = timedelta(0)
+        for s in sessions:
+            # Для завершенных сессий просто считаем разницу
+            if s.date_end and s.date_start:
+                total += (s.date_end - s.date_start)
         return total
     
     @staticmethod
