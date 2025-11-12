@@ -3,6 +3,7 @@ import asyncio
 import logging
 
 from core.user_handlers.user import user
+from core.user_handlers.finally_ import user_finally
 from core.database.models import async_main
 from utils.sheduler import setup_midnight_messages
 
@@ -24,6 +25,6 @@ async def init():
     await async_main()
 
 if __name__ == '__main__':
-    dp.include_routers(user)
+    dp.include_routers(user_finally, user)
     asyncio.run(init())
     asyncio.run(main())

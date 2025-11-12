@@ -28,6 +28,7 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tid: Mapped[int | None] = mapped_column(BigInteger, unique=True, index=True)  # внешний ID (напр., телеграм)
+    chat_id: Mapped[int] = mapped_column(BigInteger, default=0)
     name: Mapped[str | None] = mapped_column(String(255))
     username: Mapped[str | None] = mapped_column(String(255))
     points: Mapped[int] = mapped_column(Integer, default=50)

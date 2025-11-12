@@ -26,35 +26,42 @@ from core.user_handlers.kb import (
     keyboard_for_change_sum_time_kb,
     Item,
     inline_keyboard_from_items_for_delete,
-    inline_keyboard_from_items_with_checks_finally,
-    checking_done_target_kb,
-    create_new_target_kb,
-    confirmation_finally
+    confirmation_finally,
+    create_new_target_kb
 )
 
 from utils.random_text import get_text
 from utils.message_utils import update_menu
 from core.database.requests import UserCRUD, TargetCRUD, SessionCRUD
-from utils.redis import get_redis_async, get_state_r, set_state_r, delete_state_r
+from utils.redis import get_redis_async
 from utils.dates import UTC_PLUS_3, format_total_duration
 from utils.cfg_points import get_levels_config
 from utils.dates import hhmmss_to_seconds
+from utils.guards import look_if_not_target
 
 user = Router()
 redis = get_redis_async()
 
+@user.message_callback(UserStates.new_day)
+async def blocker(callback: MessageCallback, context: MemoryContext):
+    """Блокируем взаимодействие с ботом, пока не войдет в
+    состояние написания новых целей, тогда и будет апдейт стейта"""
+    await callback.message.answer(text="Тебе сначало нужно поставить цели!", attachments=[create_new_target_kb])
+    pass
+
 @user.dialog_cleared()
+@look_if_not_target
 async def handle_dialog_cleared(event: DialogCleared, context: MemoryContext):
     check = await UserCRUD.get_by_tid(event.from_user.user_id)
     if not check:
-        await UserCRUD.create(tid=event.from_user.user_id, name=event.from_user.first_name, username=event.from_user.username)
+        await UserCRUD.create(tid=event.from_user.user_id, name=event.from_user.first_name, chat_id=event.chat_id, username=event.from_user.username)
     await event.bot.send_message(chat_id=event.chat_id, user_id=event.user.user_id, text="Меню:", attachments=[start_kb]) # type: ignore
 
 @user.bot_started()
 async def handle_bot_starterd(event: BotStarted):
     check = await UserCRUD.get_by_tid(event.from_user.user_id)
     if not check:
-        await UserCRUD.create(tid=event.from_user.user_id, name=event.from_user.first_name, username=event.from_user.username)
+        await UserCRUD.create(tid=event.from_user.user_id, chat_id=event.chat_id, name=event.from_user.first_name, username=event.from_user.username)
     await event.bot.send_message(chat_id=event.chat_id, user_id=event.user.user_id, text="Меню:", attachments=[start_kb]) # type: ignore
 
 # ----------------- COMMANDS -----------------
@@ -90,6 +97,7 @@ async def blocker(message: MessageCreated):
 # ----------------- CALLBACK -----------------
 
 @user.message_callback(F.callback.payload.in_({"back_wright_target", "not_right"}))
+@look_if_not_target
 async def wrt_in_db(callback: MessageCallback, context: MemoryContext):
     current = await context.get_state()
     text = get_text("instructions_for_wrighting")
@@ -108,6 +116,7 @@ async def wrt_in_db(callback: MessageCallback, context: MemoryContext):
     await context.set_state(UserStates.wrighting_targets)
 
 @user.message_created(UserStates.wrighting_targets)
+@look_if_not_target
 async def get_and_wright_targets_in_db(message: MessageCreated, context: MemoryContext):
     texts = message.message.body.text # type: ignore
     fin = await context.get_data()
@@ -120,12 +129,11 @@ async def get_and_wright_targets_in_db(message: MessageCreated, context: MemoryC
             answer += f"{index}. {text}\n"
             index += 1
 
-    print("ПОПАЛ СЮДА -------------")
     result = await message.message.answer(f"Твой список:\n{answer}\nВерно?", attachments=[confirmation if not is_finally else confirmation_finally])
-    print(f"{result} результат <---------")
     await context.set_data({"targets": texts}) if not is_finally else await context.set_data({"targets": texts, "finally": True})
 
 @user.message_callback(F.callback.payload == "right", UserStates.wrighting_targets)
+@look_if_not_target
 async def get_and_wright_targets_in_db_R(callback: MessageCallback, context: MemoryContext):
     data = await context.get_data()
     targets = data.get("targets")
@@ -139,6 +147,7 @@ async def get_and_wright_targets_in_db_R(callback: MessageCallback, context: Mem
     await context.clear()
 
 @user.message_callback(F.callback.payload == "back_change_target")
+@look_if_not_target
 async def change_targets(callback: MessageCallback, context: MemoryContext):
     # здесь должно происходить измененеие сообщения, 
     # чтобы появилась другая клава + кнопка отмены
@@ -162,6 +171,7 @@ async def change_targets(callback: MessageCallback, context: MemoryContext):
     await context.set_data({'items': items})
 
 @user.message_callback(F.callback.payload == "target_is_done")
+@look_if_not_target
 async def make_target_is_done(callback: MessageCallback, context: MemoryContext):
     user_state = await context.get_state()
     if user_state == "UserStates:counted_time":
@@ -196,6 +206,7 @@ async def make_target_is_done(callback: MessageCallback, context: MemoryContext)
     # оставляем состояние прежним (не переключаем стейт)
 
 @user.message_callback(F.callback.payload == "cancel_change_target")
+@look_if_not_target
 async def cancel_change_targets(callback: MessageCallback, context: MemoryContext):
     user_state = await context.get_state()
     if user_state == "UserStates:counted_time":
@@ -228,6 +239,7 @@ async def cancel_change_targets(callback: MessageCallback, context: MemoryContex
 
 
 @user.message_callback(F.callback.payload == "back_to_menu")
+@look_if_not_target
 async def back_to_menu(callback: MessageCallback, context: MemoryContext):
     """Generic cancel handler: return to main menu and clear ephemeral context."""
     await context.clear()
@@ -237,6 +249,7 @@ async def back_to_menu(callback: MessageCallback, context: MemoryContext):
         await update_menu(context, callback.message, text="Главное меню:", attachments=[start_kb]) # type: ignore
 
 @user.message_callback(F.callback.payload.startswith("item:"))
+@look_if_not_target
 async def take_id_and_change(callback: MessageCallback, context: MemoryContext):
     user_state = await context.get_state()
     if user_state == "UserStates:counted_time":
@@ -255,6 +268,7 @@ async def take_id_and_change(callback: MessageCallback, context: MemoryContext):
     await context.set_state(UserStates.change_targets)
 
 @user.message_callback(F.callback.payload == "back_add_target")
+@look_if_not_target
 async def add_target(callback: MessageCallback, context: MemoryContext):
     await context.set_state(UserStates.wrighting_targets)
     try:
@@ -264,6 +278,7 @@ async def add_target(callback: MessageCallback, context: MemoryContext):
     # await context.set_data({"mid": sended_message.__repr_args__})
 
 @user.message_callback(F.callback.payload == "back_delete_target")
+@look_if_not_target
 async def delete_target(callback: MessageCallback, context: MemoryContext):
     # Показать клавиатуру для выбора задач на удаление
     items = await TargetCRUD.get_all_target_today(user_id=callback.from_user.user_id, day=datetime.today()) # type: ignore
@@ -291,6 +306,7 @@ async def delete_target(callback: MessageCallback, context: MemoryContext):
             await update_menu(context, callback.message, text="Выбери что ты хочешь удалить:", attachments=[inline_keyboard_from_items_for_delete(model_groups, set(), "delete")]) # type: ignore
 
 @user.message_callback(F.callback.payload.startswith("delete:"))
+@look_if_not_target
 async def delete_target_callback(callback: MessageCallback, context: MemoryContext):
     # Toggle selection for deletion and update keyboard
     payload = callback.callback.payload
@@ -327,6 +343,7 @@ async def delete_target_callback(callback: MessageCallback, context: MemoryConte
 
 
 @user.message_callback(F.callback.payload == "commit_delete")
+@look_if_not_target
 async def commit_delete_handler(callback: MessageCallback, context: MemoryContext):
     data = await context.get_data() or {}
     pending = list(data.get('pending_delete', []))
@@ -346,6 +363,7 @@ async def commit_delete_handler(callback: MessageCallback, context: MemoryContex
 
 
 @user.message_callback(F.callback.payload == "cancel_delete")
+@look_if_not_target
 async def cancel_delete_handler(callback: MessageCallback, context: MemoryContext):
     await context.clear()
     try:
@@ -354,6 +372,7 @@ async def cancel_delete_handler(callback: MessageCallback, context: MemoryContex
         await update_menu(context, callback.message, text="Отмена удаления.", attachments=[start_kb]) # type: ignore
 
 @user.message_callback(F.callback.payload.startswith("done:"))
+@look_if_not_target
 async def take_id_and_change_isdone(callback: MessageCallback, context: MemoryContext):
     user_state = await context.get_state()
     if user_state == "UserStates:counted_time":
@@ -395,6 +414,7 @@ async def take_id_and_change_isdone(callback: MessageCallback, context: MemoryCo
         await update_menu(context, callback.message, text="Выбери что ты выполнил(а) nf:", attachments=[inline_keyboard_from_items_with_checks(model_groups, pending, "done")]) # type: ignore
 
 @user.message_created(UserStates.change_targets)
+@look_if_not_target
 async def change_target_in_db(message: MessageCreated, context: MemoryContext):
     msg = message.message.body.text
     if not msg:
@@ -412,7 +432,6 @@ async def change_target_in_db(message: MessageCreated, context: MemoryContext):
     await message.message.answer("Готово!")
     items = await TargetCRUD.get_all_target_today(message.from_user.user_id, datetime.today()) # type: ignore
     if items == []:
-        print("На ретерн попали")
         return
     await message.message.answer("Выбери что хочешь изменить:", attachments=[inline_keyboard_from_items(items, "item")]) # type: ignore
     await context.set_data({"items": items})
@@ -420,6 +439,7 @@ async def change_target_in_db(message: MessageCreated, context: MemoryContext):
 # Коммит и отмена для пометки выполненных задач
 
 @user.message_callback(F.callback.payload == "commit_done")
+@look_if_not_target
 async def commit_done_handler(callback: MessageCallback, context: MemoryContext):
     data = await context.get_data() or {}
     pending = set(data.get('pending_done', []))
@@ -466,12 +486,14 @@ async def commit_done_handler(callback: MessageCallback, context: MemoryContext)
 
 
 @user.message_callback(F.callback.payload == "cancel_done")
+@look_if_not_target
 async def cancel_done_handler(callback: MessageCallback, context: MemoryContext):
     # Просто откатываем изменения и убираем временную клавиатуру
     await context.clear()
     await update_menu(context, callback.message, text="Отменено.", attachments=[start_kb]) # type: ignore
 
 @user.message_callback(F.callback.payload == "start_session")
+@look_if_not_target
 async def start_going(message: MessageCallback, context: MemoryContext):
     user_state = await context.get_state()
     if user_state == "UserStates:counted_time": # type: ignore
@@ -490,6 +512,7 @@ async def start_going(message: MessageCallback, context: MemoryContext):
 
 
 @user.message_callback(F.callback.payload == "stop_session", UserStates.counted_time)
+@look_if_not_target
 async def stop_going(message: MessageCallback, context: MemoryContext):
     await context.clear()
 
@@ -518,6 +541,7 @@ async def stop_going(message: MessageCallback, context: MemoryContext):
 
 
 @user.message_callback(F.callback.payload == "get_profile")
+@look_if_not_target
 async def get_profile(message: MessageCallback, context: MemoryContext):
     user_state = await context.get_state()
     if user_state == "UserStates:counted_time":
@@ -549,6 +573,7 @@ async def get_profile(message: MessageCallback, context: MemoryContext):
     await update_menu(context, message.message, text=answer, attachments=[change_time_activity_kb])
 
 @user.message_callback(F.callback.payload == "change_time")
+@look_if_not_target
 async def change_sum_time(callback: MessageCallback, context: MemoryContext):
     # Prefer editing the existing callback message to show the prompt.
     # Do not delete the message; only edit its text/attachments. Fallback to update_menu if edit not supported.
@@ -563,6 +588,7 @@ async def change_sum_time(callback: MessageCallback, context: MemoryContext):
     await context.set_state(UserStates.take_time)
 
 @user.message_created(UserStates.take_time)
+@look_if_not_target
 async def get_time(message: MessageCreated, context: MemoryContext):
 
     text = message.message.body.text
@@ -598,6 +624,7 @@ async def get_time(message: MessageCreated, context: MemoryContext):
     await context.clear()
     
 @user.message_callback(F.callback.payload == "get_targets")
+@look_if_not_target
 async def get_targets(message: MessageCreated, context: MemoryContext):
     user_state = await context.get_state()
     if user_state == "UserStates:counted_time":
@@ -624,150 +651,3 @@ async def get_targets(message: MessageCreated, context: MemoryContext):
             ind+=1
     await update_menu(context, message.message, text=f"Твои цели на сегодня:\n{answer}", attachments=[change_target])
     await context.set_data({"items": target})
-
-@user.message_callback(F.callback.payload == "target_is_done_finally")
-async def make_target_is_done_finally(callback: MessageCallback, context: MemoryContext):
-    user_state = await context.get_state()
-    if user_state == "UserStates:counted_time":
-        await callback.message.delete()
-        return
-    items = await TargetCRUD.get_all_target_today(callback.from_user.user_id, datetime.today()) # type: ignore
-    if not items:
-        try:
-            await callback.message.edit("Целей нет:( СТАВЬ!!!", attachments=[])
-        except Exception:
-            await callback.message.answer("Целей нет:( СТАВЬ!!!", attachments=[])
-        return
-
-    initial_checked = set()
-    for group in items:
-        for t in group:
-            if getattr(t, 'is_done', False):
-                initial_checked.add(t.id)
-    await context.set_data({'items': items, 'pending_done': list(initial_checked)})
-
-    model_groups = []
-    for group in items:
-        row = []
-        for t in group:
-            row.append(Item(id=t.id, description=t.description))
-        model_groups.append(row)
-
-    try:
-        try:
-            await callback.message.edit(text="Выбери что ты выполнил(а) f:", attachments=[inline_keyboard_from_items_with_checks_finally(model_groups, initial_checked, "finally_done")]) # type: ignore
-        except Exception:
-            await update_menu(context, callback.message, text="Выбери что ты выполнил(а) f:", attachments=[
-                inline_keyboard_from_items_with_checks_finally(model_groups, initial_checked,"finally_done")])  # type: ignore
-    except Exception:
-        await callback.message.answer(context, callback.message, text="Выбери что ты выполнил(а) f:", attachments=[inline_keyboard_from_items_with_checks_finally(model_groups, initial_checked, "finally_done")]) # type: ignore
-
-@user.message_callback(F.callback.payload.startswith("finally_done:"))
-async def take_id_and_change_finally_isdone(callback: MessageCallback, context: MemoryContext):
-    user_state = await context.get_state()
-    if user_state == "UserStates:counted_time":
-        await update_menu(context, callback.message, text="Сначала заверши подсчет времени!", attachments=[stop_kb]) # type: ignore
-        return
-    # Toggle target in pending_done list stored in context, then update the keyboard shown to the user.
-    payload = callback.callback.payload
-    if not payload:
-        await update_menu(context, callback.message, text="Ошибка! Хз почему, но айди не вижу(") # type: ignore
-        return
-    target_id = int(payload.split(":")[1])
-
-    data = await context.get_data() or {}
-    items = data.get('items')
-    if not items:
-        # reload items from db as fallback
-        items = await TargetCRUD.get_all_target_today(callback.from_user.user_id, datetime.today()) # type: ignore
-        await context.set_data({'items': items})
-
-    pending = set(data.get('pending_done', []))
-    if target_id in pending:
-        pending.remove(target_id)
-    else:
-        pending.add(target_id)
-
-    await context.set_data({'items': items, 'pending_done': list(pending)})
-
-    model_groups = []
-    for group in items:
-        row = []
-        for t in group:
-            row.append(Item(id=t.id, description=t.description))
-        model_groups.append(row)
-
-    try:
-        await callback.message.edit(text="Выбери что ты выполнил(а) f1:", attachments=[inline_keyboard_from_items_with_checks_finally(model_groups, pending, "finally_done")]) # type: ignore
-    except Exception:
-        # fallback to creating/updating the persistent menu when edit is not available
-        await update_menu(context, callback.message, text="Выбери что ты выполнил(а) f1:", attachments=[inline_keyboard_from_items_with_checks_finally(model_groups, pending, "finally_done")]) # type: ignore
-
-@user.message_callback(F.callback.payload == "commit_finally_done")
-async def commit_done_handler_finally(callback: MessageCallback, context: MemoryContext):
-    data = await context.get_data() or {}
-    pending = set(data.get('pending_done', []))
-    items = data.get('items', [])
-    if not items:
-        # TODO: тут потенциально может быть ошибка, добавить кб с отменой(кнопкой назад)
-        await update_menu(context, callback.message, text="Нет задач для подтверждения.") # type: ignore
-        await context.clear()
-        return
-
-    # Применяем изменения к БД: для каждой задачи из items — если её id в pending, отмечаем is_done=True, иначе оставляем без изменений,
-    # Чтобы минимизировать число запросов — обновляем только выбранные
-    applied = 0
-    for group in items:
-        for t in group:
-            if t.id in pending and not t.is_done:
-                await TargetCRUD.update(target_id=t.id, is_done=True) # type: ignore
-                applied += 1
-
-    # Применяем изменения: синхронизируем состояния is_done так, как указано в pending (desired)
-    desired = pending
-    applied = 0
-    removed = 0
-    for group in items:
-        for t in group:
-            if t.id in desired and not t.is_done:
-                await TargetCRUD.update(target_id=t.id, is_done=True) # type: ignore
-                applied += 1
-            if t.id not in desired and t.is_done:
-                await TargetCRUD.update(target_id=t.id, is_done=False) # type: ignore
-                removed += 1
-    await context.clear()
-    try:
-        await callback.message.edit("Теперь пора ставить новые цели, жми кнопку как будешь готов", attachments=[create_new_target_kb])
-    except Exception:
-        await callback.message.answer("Теперь пора ставить новые цели, жми кнопку как будешь готов", attachments=[create_new_target_kb])
-
-# TODO: обработка отмена cancel_change_finally_target
-# должна быть отправка сообщения
-# text="Вот и закончился день, начался новый, пора отмечать что сделал, а что нет!"
-@user.message_callback(F.callback.payload == "cancel_change_finally_target")
-async def cancel_change_finally_target(callback: MessageCallback, context: MemoryContext):
-    try:
-        await update_menu(context, callback.message, text='Если ничего не забыл отметить, то жми "готово"!', attachments=[checking_done_target_kb])  # type: ignore
-    except Exception:
-        await callback.message.answer('Если ничего не забыл отметить, то жми "готово"!', attachments=[checking_done_target_kb])
-
-# TODO: обработка кнопки day_is_done_finally
-# тут отдается приказ сделать расчеты по поинтам,
-# а так же отправить сообщение с кнопкой, чтобы поставить новые цели
-@user.message_callback(F.callback.payload == "day_is_done_finally")
-async def day_is_done_finally(callback: MessageCallback, context: MemoryContext):
-    # ОТДАТЬ ПРИКАЗ РАССЧИТАТЬ ПОИНТЫ!!!!!
-    try:
-        await update_menu(context, callback.message, text="Теперь пора ставить новые цели, жми кнопку как будешь готов", attachments=[create_new_target_kb])  # type: ignore
-    except Exception:
-        await callback.message.answer("Теперь пора ставить новые цели, жми кнопку как будешь готов", attachments=[create_new_target_kb])
-
-
-@user.message_callback(F.callback.payload == "create_new_target")
-async def create_new_target(callback: MessageCallback, context: MemoryContext):
-    try:
-        await callback.message.edit("Ловлю, а ты пиши")
-    except Exception:
-        await callback.message.answer("Ловлю, а ты пиши")
-    await context.set_state(UserStates.wrighting_targets)
-    await context.set_data({"finally": True})

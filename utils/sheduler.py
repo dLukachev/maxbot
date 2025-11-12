@@ -4,9 +4,10 @@ from datetime import datetime
 
 from core.database.requests import UserCRUD
 from utils.dates import UTC_PLUS_3
-from core.user_handlers.kb import wright_target
 from utils.close_activity import stop_one_sessions
 from core.user_handlers.kb import checking_done_target_kb
+
+from utils.guards import CACHE_
 
 def setup_midnight_messages(bot):
     """
@@ -25,8 +26,7 @@ def setup_midnight_messages(bot):
                 sent_count = 0
                 for user in users:
                     try:
-                        # TODO: пора оценивать прошедший день, нужно поменять месседж, и клавиатуру,
-                        # TODO: плюс хендлер, чтобы хавать эти действия
+                        CACHE_.pop(user.tid)
                         await stop_one_sessions(bot, user.tid)
                         await bot.send_message(user_id=user.tid, text="Вот и закончился день, начался новый, пора отмечать что сделал, а что нет!", attachments=[checking_done_target_kb])
                         sent_count += 1
@@ -47,7 +47,7 @@ def setup_midnight_messages(bot):
     
     scheduler.add_job(
         send_midnight_messages,
-        trigger=CronTrigger(hour=23, minute=35),
+        trigger=CronTrigger(hour=0, minute=53),
         id='midnight_messages'
     )
     

@@ -14,6 +14,7 @@ class UserCRUD:
     async def create(
         *,
         tid: Optional[int],
+        chat_id: Optional[int],
         name: Optional[str],
         username: Optional[str],
         points: int = 50,
@@ -21,7 +22,7 @@ class UserCRUD:
         count_time: Optional[str | None] = None,
     ) -> User:
         async with async_session() as session:
-            user = User(tid=tid, name=name, username=username, points=points, level=level, count_time=count_time)
+            user = User(tid=tid, chat_id=chat_id, name=name, username=username, points=points, level=level, count_time=count_time)
             session.add(user)
             try:
                 await session.commit()
