@@ -126,18 +126,7 @@ async def get_and_wright_targets_in_db_R(callback: MessageCallback, context: Mem
 @user.message_callback(F.callback.payload == "back_change_target")
 @look_if_not_target
 async def change_targets(callback: MessageCallback, context: MemoryContext):
-    # здесь должно происходить измененеие сообщения, 
-    # чтобы появилась другая клава + кнопка отмены
-    # Так же тут нужно передавать все сегодняшние цели, 
-    # а еще нужно сделать добавление:)))))
     user_state = await context.get_state()
-    if user_state == "UserStates:counted_time":
-        try:
-            await callback.message.edit(text="Сначала заверши подсчет времени!", attachments=[stop_kb]) # type: ignore
-        except Exception:
-            await update_menu(context, callback.message, text="Сначала заверши подсчет времени!", attachments=[stop_kb]) # type: ignore
-        await context.set_state(UserStates.counted_time)
-        return
     items = await TargetCRUD.get_all_target_today(callback.from_user.user_id, datetime.today()) # type: ignore
     if items == []:
         return
@@ -151,10 +140,6 @@ async def change_targets(callback: MessageCallback, context: MemoryContext):
 @look_if_not_target
 async def make_target_is_done(callback: MessageCallback, context: MemoryContext):
     user_state = await context.get_state()
-    if user_state == "UserStates:counted_time":
-        await update_menu(context, callback.message, text="Сначала заверши подсчет времени!", attachments=[stop_kb]) # type: ignore
-        await context.set_state(UserStates.counted_time)
-        return
     items = await TargetCRUD.get_all_target_today(callback.from_user.user_id, datetime.today()) # type: ignore
     if items == []:
         return
@@ -186,10 +171,6 @@ async def make_target_is_done(callback: MessageCallback, context: MemoryContext)
 @look_if_not_target
 async def cancel_change_targets(callback: MessageCallback, context: MemoryContext):
     user_state = await context.get_state()
-    if user_state == "UserStates:counted_time":
-        await update_menu(context, callback.message, text="Сначала заверши подсчет времени!", attachments=[stop_kb]) # type: ignore
-        await context.set_state(UserStates.counted_time)
-        return
     data = await context.get_data()
     if not data:
         data = await TargetCRUD.get_all_target_today(user_id=callback.from_user.user_id, day=datetime.today()) # type: ignore
@@ -229,9 +210,6 @@ async def back_to_menu(callback: MessageCallback, context: MemoryContext):
 @look_if_not_target
 async def take_id_and_change(callback: MessageCallback, context: MemoryContext):
     user_state = await context.get_state()
-    if user_state == "UserStates:counted_time":
-        await update_menu(context, callback.message, text="Сначала заверши подсчет времени!", attachments=[stop_kb]) # type: ignore
-        return
     id = callback.callback.payload
     if not id:
         await update_menu(context, callback.message, text="Ошибка! Хз почему, но айди не вижу(") # type: ignore
@@ -352,9 +330,6 @@ async def cancel_delete_handler(callback: MessageCallback, context: MemoryContex
 @look_if_not_target
 async def take_id_and_change_isdone(callback: MessageCallback, context: MemoryContext):
     user_state = await context.get_state()
-    if user_state == "UserStates:counted_time":
-        await update_menu(context, callback.message, text="Сначала заверши подсчет времени!", attachments=[stop_kb]) # type: ignore
-        return
     # Toggle target in pending_done list stored in context, then update the keyboard shown to the user.
     payload = callback.callback.payload
     if not payload:
@@ -474,19 +449,17 @@ async def cancel_done_handler(callback: MessageCallback, context: MemoryContext)
 @look_if_not_target
 async def start_going(message: MessageCallback, context: MemoryContext):
     user_state = await context.get_state()
-    if user_state == "UserStates:counted_time": # type: ignore
-        await update_menu(context, message.message, text="У тебя уже открыта сессия...", attachments=[stop_kb])
-        await context.set_state(UserStates.counted_time)
+    session = await SessionCRUD.get_active_session(message.from_user.user_id) # type: ignore
+    if not session:
+        now = datetime.now(UTC_PLUS_3)
+        await SessionCRUD.create(user_id=message.from_user.user_id, date_start=now, date_end=now, is_active=True) # type: ignore
         # await set_state_r(redis, message.from_user.user_id, 'go') # type: ignore
-        return
+        await context.set_state(UserStates.counted_time)
+        await update_menu(context, message.message, text=f"Фиксирую старт... {now.strftime('%m-%d %H:%M:%S')}", attachments=[stop_kb])
     else:
-        session = await SessionCRUD.get_active_session(message.from_user.user_id) # type: ignore
-        if not session:
-            now = datetime.now(UTC_PLUS_3)
-            await SessionCRUD.create(user_id=message.from_user.user_id, date_start=now, date_end=now, is_active=True) # type: ignore
-            # await set_state_r(redis, message.from_user.user_id, 'go') # type: ignore
-            await context.set_state(UserStates.counted_time)
-            await update_menu(context, message.message, text=f"Фиксирую старт... {now.strftime('%m-%d %H:%M:%S')}", attachments=[stop_kb])
+        await update_menu(context, message.message, text="Сначала заверши подсчет времени!",
+                          attachments=[stop_kb])  # type: ignore
+        await context.set_state(UserStates.counted_time)
 
 
 @user.message_callback(F.callback.payload == "stop_session", UserStates.counted_time)
@@ -540,17 +513,6 @@ async def draw_profile(message: MessageCallback, context:MemoryContext):
 @user.message_callback(F.callback.payload == "get_profile")
 @look_if_not_target
 async def get_profile(message: MessageCallback, context: MemoryContext):
-    user_state = await context.get_state()
-    if user_state == "UserStates:counted_time":
-        await update_menu(context, message.message, text="Сначала заверши подсчет времени!", attachments=[stop_kb])
-        return
-    else:
-        session = await SessionCRUD.get_active_session(message.from_user.user_id) # type: ignore
-        if session:
-            await context.set_state(UserStates.counted_time)
-            await update_menu(context, message.message, text="Сначала заверши подсчет времени!", attachments=[stop_kb])
-            return
-
     await draw_profile(message, context)
 
 @user.message_callback(F.callback.payload == "change_time")
@@ -607,17 +569,6 @@ async def get_time(message: MessageCreated, context: MemoryContext):
 @user.message_callback(F.callback.payload == "get_targets")
 @look_if_not_target
 async def get_targets(message: MessageCreated, context: MemoryContext):
-    user_state = await context.get_state()
-    if user_state == "UserStates:counted_time":
-        await update_menu(context, message.message, text="Сначала заверши подсчет времени!", attachments=[stop_kb])
-        return
-    else:
-        session = await SessionCRUD.get_active_session(message.from_user.user_id) # type: ignore
-        if session:
-            await context.set_state(UserStates.counted_time)
-            await update_menu(context, message.message, text="Сначала заверши подсчет времени!", attachments=[stop_kb])
-            return
-    
     target = await TargetCRUD.get_all_target_today(message.from_user.user_id, datetime.today()) # type: ignore
     if target == []:
         await update_menu(context, message.message, text="Почему то не вижу твоих целей на сегодня(\nВозможно ты их просто не написал(а)..(в общем где-то моя ошибка)\n\nНапиши их прямо сейчас, ловлю!")
