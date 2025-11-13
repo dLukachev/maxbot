@@ -22,13 +22,11 @@ def inline_keyboard_from_items(items: List[Item], callback_prefix: str):
         return kb.as_markup()
 
     index = 1
-    for group in items:
-        row = []
-        for item in group:
-            kb.row(CallbackButton(
-                    text=f"{index}. {item.description}",
-                    payload=f"{callback_prefix}:{item.id}"
-                ))
+    for item in items:
+        kb.row(CallbackButton(
+                text=f"{index}. {item.description}",
+                payload=f"{callback_prefix}:{item.id}"
+            ))
             
     kb.row(CallbackButton(text="Назад", payload="back_to_menu"))
 

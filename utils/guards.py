@@ -2,7 +2,7 @@ import functools
 from typing import Callable, Awaitable, Any
 from datetime import datetime
 
-from core.database.requests import TargetCRUD, UserCRUD
+from core.database.requests import TargetCRUD
 from utils.message_utils import update_menu
 from utils.states import UserStates
 from core.user_handlers.kb import stop_kb
@@ -18,8 +18,6 @@ def look_if_not_target(func: Callable[..., Awaitable[Any]]) -> Callable[..., Awa
 
             context = kwargs['context'] if args else None
             user_state = await context.get_state()
-
-            print(user_state)
 
             if str(user_state) == "UserStates:counted_time" and event.callback.payload != "stop_session":
                 print(f"RETURN ---> state = {user_state}")

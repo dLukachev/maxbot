@@ -2,7 +2,6 @@ from datetime import datetime, timedelta
 from maxapi import Router, F
 from maxapi.types import MessageCreated, MessageCallback, Command, DialogCleared, BotStarted
 from maxapi.context import MemoryContext
-from sqlalchemy import Sequence
 import logging
 
 logging.basicConfig(
@@ -83,7 +82,7 @@ async def handle_bot_started(event: BotStarted, context: MemoryContext):
 
 @user.message_created(Command("help"))
 @look_if_not_target
-async def help(message: MessageCreated, context: MemoryContext):
+async def helper(message: MessageCreated, context: MemoryContext):
     help_text = (
         "👋 Привет! Я помогу тебе эффективно управлять задачами.\n\n"
         "Как это работает (3 простых шага):\n\n"
@@ -103,7 +102,6 @@ async def help(message: MessageCreated, context: MemoryContext):
 @user.message_callback(F.callback.payload.in_({"back_wright_target", "not_right"}))
 @look_if_not_target
 async def wrt_in_db(callback: MessageCallback, context: MemoryContext):
-    current = await context.get_state()
     text = get_text("instructions_for_wrighting")
     if text and callback.callback.payload == "back_wright_target":
         try:
@@ -132,7 +130,7 @@ async def get_and_wright_targets_in_db(message: MessageCreated, context: MemoryC
             answer += f"{index}. {text}\n"
             index += 1
 
-    result = await message.message.answer(f"Твой список:\n{answer}\nВерно?", attachments=[confirmation if not is_finally else confirmation_finally])
+    await message.message.answer(f"Твой список:\n{answer}\nВерно?", attachments=[confirmation if not is_finally else confirmation_finally])
     await context.set_data({"targets": texts}) if not is_finally else await context.set_data({"targets": texts, "finally": True})
 
 @user.message_callback(F.callback.payload == "right", UserStates.wrighting_targets)
@@ -152,9 +150,8 @@ async def get_and_wright_targets_in_db_R(callback: MessageCallback, context: Mem
 @user.message_callback(F.callback.payload == "back_change_target")
 @look_if_not_target
 async def change_targets(callback: MessageCallback, context: MemoryContext):
-    user_state = await context.get_state()
     _, items = await TargetCRUD.get_all_target_today(callback.from_user.user_id, datetime.today()) # type: ignore
-    if items == []:
+    if not items:
         return
     try:
         await callback.message.edit(text="Выбери что хочешь изменить:", attachments=[inline_keyboard_from_items(items, "item")]) # type: ignore
@@ -165,9 +162,8 @@ async def change_targets(callback: MessageCallback, context: MemoryContext):
 @user.message_callback(F.callback.payload == "target_is_done")
 @look_if_not_target
 async def make_target_is_done(callback: MessageCallback, context: MemoryContext):
-    user_state = await context.get_state()
     _, items = await TargetCRUD.get_all_target_today(callback.from_user.user_id, datetime.today()) # type: ignore
-    if items == []:
+    if not items:
         return
     # Сохраняем items в context и показываем интерактивную клавиатуру с чекбоксами
     # Попробуем редактировать текущее сообщение — более плавный UX
@@ -193,7 +189,6 @@ async def make_target_is_done(callback: MessageCallback, context: MemoryContext)
 @user.message_callback(F.callback.payload == "cancel_change_target")
 @look_if_not_target
 async def cancel_change_targets(callback: MessageCallback, context: MemoryContext):
-    user_state = await context.get_state()
     data = await context.get_data()
     if not data:
         _, data = await TargetCRUD.get_all_target_today(user_id=callback.from_user.user_id, day=datetime.today()) # type: ignore
@@ -230,7 +225,6 @@ async def back_to_menu(callback: MessageCallback, context: MemoryContext):
 @user.message_callback(F.callback.payload.startswith("item:"))
 @look_if_not_target
 async def take_id_and_change(callback: MessageCallback, context: MemoryContext):
-    user_state = await context.get_state()
     id = callback.callback.payload
     if not id:
         await update_menu(context, callback.message, text="Ошибка! Хз почему, но айди не вижу(") # type: ignore
@@ -248,10 +242,9 @@ async def take_id_and_change(callback: MessageCallback, context: MemoryContext):
 async def add_target(callback: MessageCallback, context: MemoryContext):
     await context.set_state(UserStates.wrighting_targets)
     try:
-        sended_message = await callback.message.edit(text=f"Введите дополнительные цели", attachments=[cancel_button_kb])
+        await callback.message.edit(text=f"Введите дополнительные цели", attachments=[cancel_button_kb])
     except Exception:
         await update_menu(context, callback.message, text=f"Введите дополнительные цели", attachments=[cancel_button_kb])
-    # await context.set_data({"mid": sended_message.__repr_args__})
 
 @user.message_callback(F.callback.payload == "back_delete_target")
 @look_if_not_target
@@ -317,7 +310,6 @@ async def delete_target_callback(callback: MessageCallback, context: MemoryConte
 async def commit_delete_handler(callback: MessageCallback, context: MemoryContext):
     data = await context.get_data() or {}
     pending = list(data.get('pending_delete', []))
-    items = data.get('items', [])
     if not pending:
         await update_menu(context, callback.message, text="Нечего удалять.")
         await context.clear()
@@ -344,8 +336,6 @@ async def cancel_delete_handler(callback: MessageCallback, context: MemoryContex
 @user.message_callback(F.callback.payload.startswith("done:"))
 @look_if_not_target
 async def take_id_and_change_isdone(callback: MessageCallback, context: MemoryContext):
-    user_state = await context.get_state()
-    # Toggle target in pending_done list stored in context, then update the keyboard shown to the user.
     payload = callback.callback.payload
     if not payload:
         await update_menu(context, callback.message, text="Ошибка! Хз почему, но айди не вижу(") # type: ignore
@@ -393,10 +383,10 @@ async def change_target_in_db(message: MessageCreated, context: MemoryContext):
         await context.clear()
         return
     
-    await TargetCRUD.update(target_id=id, description=msg)
+    await TargetCRUD.update(target_id=id, description=msg) #type: ignore
     await message.message.answer("Готово!")
     _, items = await TargetCRUD.get_all_target_today(message.from_user.user_id, datetime.today()) # type: ignore
-    if items == []:
+    if not items:
         print("На ретерн попали")
         return
     await message.message.answer("Выбери что хочешь изменить:", attachments=[inline_keyboard_from_items(items, "item")]) # type: ignore
@@ -459,12 +449,6 @@ async def cancel_done_handler(callback: MessageCallback, context: MemoryContext)
 @user.message_callback(F.callback.payload == "start_session")
 @look_if_not_target
 async def start_session_choose_target(message: MessageCallback, context: MemoryContext):
-    user_state = await context.get_state()
-    if user_state == "UserStates:counted_time":
-        await update_menu(context, message.message, text="У тебя уже открыта сессия...", attachments=[stop_kb])
-        return
-
-    # 1. Получаем цели на сегодня
     _, targets_raw = await TargetCRUD.get_all_target_today(message.from_user.user_id, datetime.today()) # type: ignore
 
     # Распаковываем вложенный список
@@ -476,7 +460,7 @@ async def start_session_choose_target(message: MessageCallback, context: MemoryC
 
     # 2. Показываем клавиатуру для выбора
     # Конвертируем цели в формат для клавиатурыƒ
-    items_for_kb = [[Item(id=t.id, description=t.description) for t in targets]]
+    items_for_kb = [Item(id=t.id, description=t.description) for t in targets]
 
     await update_menu(
         context,
@@ -536,33 +520,33 @@ async def stop_going(message: MessageCallback, context: MemoryContext):
     await update_menu(context, message.message, text=f"Сессия завершена. Добавлено: `{elapsed_str}`", attachments=[start_kb])
 
 
-async def draw_profile(message: MessageCallback, context:MemoryContext):
+async def draw_profile(message: MessageCallback | MessageCreated, context: MemoryContext):
     user_data = await UserCRUD.get_by_tid(message.from_user.user_id)
 
     today = datetime.now(UTC_PLUS_3).date()
 
-    time_today = await SessionCRUD.total_active_time_on_date(user_data.tid, today)
-    time_week = await SessionCRUD.get_total_time_for_week(user_data.tid, today)
+    time_today = await SessionCRUD.total_active_time_on_date(user_data.tid, today) #type: ignore
+    time_week = await SessionCRUD.get_total_time_for_week(user_data.tid, today) #type: ignore
 
     next_level = None
 
     lp = get_levels_config()
     for i in sorted(lp.keys(), key=int):
-        if int(user_data.points) < int(i):
+        if int(user_data.points) < int(i): #type: ignore
             next_level = int(i)
             break
 
     answer = (
         f"👤 *{user_data.name}, {user_data.level} уровень*\n"
-        f"📈 Поинтов: {user_data.points}, до следующего уровня {next_level - int(user_data.points)}\n\n"
+        f"📈 Поинтов: {user_data.points}, до следующего уровня {next_level - int(user_data.points)}\n\n" #type: ignore
         f"⏱️ *Активность:*\n"
         f"За сегодня: *{format_duration(time_today)}*\n"
         f"За неделю: *{format_duration(time_week)}*\n"
-        f"Всего: *{format_total_duration(user_data.count_time)}*\n\n"
+        f"Всего: *{format_total_duration(user_data.count_time)}*\n\n" #type: ignore
         f"🎯 *Время по целям:*"
     )
 
-    targets_raw = await TargetCRUD.list_by_user(user_data.tid)
+    targets_raw = await TargetCRUD.list_by_user(user_data.tid) #type: ignore
 
     targets_with_time = []
     for target in targets_raw:
@@ -574,7 +558,7 @@ async def draw_profile(message: MessageCallback, context:MemoryContext):
     print(user_state)
     if str(user_state) == "UserStates:draw_new_prifile":
         await message.message.answer(text=answer, attachments=[profile_kb])
-        context.clear()
+        await context.clear()
     else:
         await update_menu(context, message.message, text=answer, attachments=[profile_kb])
 
@@ -678,7 +662,7 @@ async def get_time(message: MessageCreated, context: MemoryContext):
 @look_if_not_target
 async def get_targets(message: MessageCreated, context: MemoryContext):
     _, target = await TargetCRUD.get_all_target_today(message.from_user.user_id, datetime.today()) # type: ignore
-    if target == []:
+    if not target:
         await update_menu(context, message.message, text="Почему то не вижу твоих целей на сегодня(\nВозможно ты их просто не написал(а)..(в общем где-то моя ошибка)\n\nНапиши их прямо сейчас, ловлю!")
         await context.set_state(UserStates.wrighting_targets)
         return
