@@ -51,6 +51,13 @@ async def blocker(callback: MessageCallback, context: MemoryContext):
     await callback.message.answer(text="Тебе сначало нужно поставить цели!", attachments=[create_new_target_kb])
     pass
 
+@user.message_created(UserStates.new_day)
+async def blocker(callback: MessageCallback, context: MemoryContext):
+    """Блокируем взаимодействие с ботом, пока не войдет в
+    состояние написания новых целей, тогда и будет апдейт стейта"""
+    await callback.message.answer(text="Тебе сначало нужно поставить цели!", attachments=[create_new_target_kb])
+    pass
+
 @user.dialog_cleared()
 @look_if_not_target
 async def handle_dialog_cleared(event: DialogCleared, context: MemoryContext):
@@ -131,7 +138,7 @@ async def get_and_wright_targets_in_db_R(callback: MessageCallback, context: Mem
 @look_if_not_target
 async def change_targets(callback: MessageCallback, context: MemoryContext):
     user_state = await context.get_state()
-    items = await TargetCRUD.get_all_target_today(callback.from_user.user_id, datetime.today()) # type: ignore
+    _, items = await TargetCRUD.get_all_target_today(callback.from_user.user_id, datetime.today()) # type: ignore
     if items == []:
         return
     try:
@@ -144,25 +151,22 @@ async def change_targets(callback: MessageCallback, context: MemoryContext):
 @look_if_not_target
 async def make_target_is_done(callback: MessageCallback, context: MemoryContext):
     user_state = await context.get_state()
-    items = await TargetCRUD.get_all_target_today(callback.from_user.user_id, datetime.today()) # type: ignore
+    _, items = await TargetCRUD.get_all_target_today(callback.from_user.user_id, datetime.today()) # type: ignore
     if items == []:
         return
     # Сохраняем items в context и показываем интерактивную клавиатуру с чекбоксами
     # Попробуем редактировать текущее сообщение — более плавный UX
     # Инициализируем checked set из БД — уже помеченные задачи должны отображаться как ✅
     initial_checked = set()
-    for group in items:
-        for t in group:
-            if getattr(t, 'is_done', False):
-                initial_checked.add(t.id)
+    for t in items:
+        if getattr(t, 'is_done', False):
+            initial_checked.add(t.id)
     await context.set_data({'items': items, 'pending_done': list(initial_checked)})
     # items — формат List[List[Target]]; конвертируем в our Item model defined in kb
     # Собираем модели
     model_groups = []
-    for group in items:
-        row = []
-        for t in group:
-            row.append(Item(id=t.id, description=t.description))
+    for t in items:
+        row = [Item(id=t.id, description=t.description)]
         model_groups.append(row)
 
     try:
@@ -177,22 +181,20 @@ async def cancel_change_targets(callback: MessageCallback, context: MemoryContex
     user_state = await context.get_state()
     data = await context.get_data()
     if not data:
-        data = await TargetCRUD.get_all_target_today(user_id=callback.from_user.user_id, day=datetime.today()) # type: ignore
+        _, data = await TargetCRUD.get_all_target_today(user_id=callback.from_user.user_id, day=datetime.today()) # type: ignore
     
     answer = ''
     ind = 1
     if isinstance(data, list):
-        for i in data:
-            for j in i:
-                mark = '✅' if getattr(j, 'is_done', False) else '❌'
-                answer += f"{ind}. {mark} {j.description}\n"
-                ind+=1
+        for j in data:
+            mark = '✅' if getattr(j, 'is_done', False) else '❌'
+            answer += f"{ind}. {mark} {j.description}\n"
+            ind+=1
     else:
-        for a in data.get("items", []): # pyright: ignore[reportAttributeAccessIssue]
-            for index, item in enumerate(a):
-                mark = '✅' if getattr(item, 'is_done', False) else '❌'
-                answer += f"{ind}. {mark} {item.description}\n"
-                ind+=1
+        for item in data.get("items", []):
+            mark = '✅' if getattr(item, 'is_done', False) else '❌'
+            answer += f"{ind}. {mark} {item.description}\n"
+            ind+=1
     await context.clear()
     try:
         await callback.message.edit(text=f"Твои цели на сегодня:\n{answer}", attachments=[change_target]) # type: ignore
@@ -240,7 +242,7 @@ async def add_target(callback: MessageCallback, context: MemoryContext):
 @look_if_not_target
 async def delete_target(callback: MessageCallback, context: MemoryContext):
     # Показать клавиатуру для выбора задач на удаление
-    items = await TargetCRUD.get_all_target_today(user_id=callback.from_user.user_id, day=datetime.today()) # type: ignore
+    _, items = await TargetCRUD.get_all_target_today(user_id=callback.from_user.user_id, day=datetime.today()) # type: ignore
     if not items:
         await update_menu(context, callback.message, text="Нет задач для удаления.")
         return
@@ -250,10 +252,8 @@ async def delete_target(callback: MessageCallback, context: MemoryContext):
 
     # Построим model groups
     model_groups = []
-    for group in items:
-        row = []
-        for t in group:
-            row.append(Item(id=t.id, description=t.description, is_done=getattr(t, 'is_done', False)))
+    for t in items:
+        row = [Item(id=t.id, description=t.description, is_done=getattr(t, 'is_done', False))]
         model_groups.append(row)
 
     try:
@@ -276,7 +276,7 @@ async def delete_target_callback(callback: MessageCallback, context: MemoryConte
     data = await context.get_data() or {}
     items = data.get('items')
     if not items:
-        items = await TargetCRUD.get_all_target_today(user_id=callback.from_user.user_id, day=datetime.today()) # type: ignore
+        _, items = await TargetCRUD.get_all_target_today(user_id=callback.from_user.user_id, day=datetime.today()) # type: ignore
 
     pending = set(data.get('pending_delete', []))
     if target_id in pending:
@@ -287,10 +287,8 @@ async def delete_target_callback(callback: MessageCallback, context: MemoryConte
     await context.set_data({'items': items, 'pending_delete': list(pending)})
 
     model_groups = []
-    for group in items:
-        row = []
-        for t in group:
-            row.append(Item(id=t.id, description=t.description, is_done=getattr(t, 'is_done', False)))
+    for t in items:
+        row = [Item(id=t.id, description=t.description, is_done=getattr(t, 'is_done', False))]
         model_groups.append(row)
 
     try:
@@ -343,7 +341,7 @@ async def take_id_and_change_isdone(callback: MessageCallback, context: MemoryCo
     items = data.get('items')
     if not items:
         # reload items from db as fallback
-        items = await TargetCRUD.get_all_target_today(callback.from_user.user_id, datetime.today()) # type: ignore
+        _, items = await TargetCRUD.get_all_target_today(callback.from_user.user_id, datetime.today()) # type: ignore
         await context.set_data({'items': items})
 
     pending = set(data.get('pending_done', []))
@@ -355,10 +353,8 @@ async def take_id_and_change_isdone(callback: MessageCallback, context: MemoryCo
     await context.set_data({'items': items, 'pending_done': list(pending)})
 
     model_groups = []
-    for group in items:
-        row = []
-        for t in group:
-            row.append(Item(id=t.id, description=t.description))
+    for t in items:
+        row = Item(id=t.id, description=t.description)
         model_groups.append(row)
 
     try:
@@ -384,7 +380,7 @@ async def change_target_in_db(message: MessageCreated, context: MemoryContext):
     
     await TargetCRUD.update(target_id=id, description=msg)
     await message.message.answer("Готово!")
-    items = await TargetCRUD.get_all_target_today(message.from_user.user_id, datetime.today()) # type: ignore
+    _, items = await TargetCRUD.get_all_target_today(message.from_user.user_id, datetime.today()) # type: ignore
     if items == []:
         print("На ретерн попали")
         return
@@ -407,24 +403,22 @@ async def commit_done_handler(callback: MessageCallback, context: MemoryContext)
     # Применяем изменения к БД: для каждой задачи из items — если её id в pending, отмечаем is_done=True, иначе оставляем без изменений
     # Чтобы минимизировать число запросов — обновляем только выбранные
     applied = 0
-    for group in items:
-        for t in group:
-            if t.id in pending and not t.is_done:
-                await TargetCRUD.update(target_id=t.id, is_done=True) # type: ignore
-                applied += 1
+    for t in items:
+        if t.id in pending and not t.is_done:
+            await TargetCRUD.update(target_id=t.id, is_done=True) # type: ignore
+            applied += 1
 
     # Применяем изменения: синхронизируем состояния is_done так, как указано в pending (desired)
     desired = pending
     applied = 0
     removed = 0
-    for group in items:
-        for t in group:
-            if t.id in desired and not t.is_done:
-                await TargetCRUD.update(target_id=t.id, is_done=True) # type: ignore
-                applied += 1
-            if t.id not in desired and t.is_done:
-                await TargetCRUD.update(target_id=t.id, is_done=False) # type: ignore
-                removed += 1
+    for t in items:
+        if t.id in desired and not t.is_done:
+            await TargetCRUD.update(target_id=t.id, is_done=True) # type: ignore
+            applied += 1
+        if t.id not in desired and t.is_done:
+            await TargetCRUD.update(target_id=t.id, is_done=False) # type: ignore
+            removed += 1
 
     msg_parts = []
     if applied:
@@ -456,10 +450,10 @@ async def start_session_choose_target(message: MessageCallback, context: MemoryC
         return
 
     # 1. Получаем цели на сегодня
-    targets_raw = await TargetCRUD.get_all_target_today(message.from_user.user_id, datetime.today()) # type: ignore
+    _, targets_raw = await TargetCRUD.get_all_target_today(message.from_user.user_id, datetime.today()) # type: ignore
 
     # Распаковываем вложенный список
-    targets = [item for sublist in targets_raw for item in sublist]
+    targets = [sublist for sublist in targets_raw]
 
     if not targets:
         await update_menu(context, message.message, text="Сначала нужно добавить цели на сегодня. Нажмите 'Цели 🧠'", attachments=[start_kb])
@@ -680,15 +674,14 @@ async def get_time(message: MessageCreated, context: MemoryContext):
 @user.message_callback(F.callback.payload == "get_targets")
 @look_if_not_target
 async def get_targets(message: MessageCreated, context: MemoryContext):
-    target = await TargetCRUD.get_all_target_today(message.from_user.user_id, datetime.today()) # type: ignore
+    _, target = await TargetCRUD.get_all_target_today(message.from_user.user_id, datetime.today()) # type: ignore
     if target == []:
         await update_menu(context, message.message, text="Почему то не вижу твоих целей на сегодня(\nВозможно ты их просто не написал(а)..(в общем где-то моя ошибка)\n\nНапиши их прямо сейчас, ловлю!")
         await context.set_state(UserStates.wrighting_targets)
         return
     answer = ''
     ind = 1
-    for a in target:
-        for index, item in enumerate(a):
+    for item in target:
             mark = '✅' if getattr(item, 'is_done', False) else '❌'
             answer += f"{ind}. {mark} {item.description}\n"
             ind+=1

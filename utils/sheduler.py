@@ -27,8 +27,14 @@ def setup_midnight_messages(bot):
                 for user in users:
                     try:
                         CACHE_.pop(user.tid)
-                        await stop_one_sessions(bot, user.tid)
-                        await bot.send_message(user_id=user.tid, text="Вот и закончился день, начался новый, пора отмечать что сделал, а что нет!", attachments=[checking_done_target_kb])
+                        try:
+                            await stop_one_sessions(bot, user.tid)
+                        except Exception as e:
+                            print(f"stop_one_sessions ERROR {e}")
+                        try:
+                            await bot.send_message(user_id=user.tid, text="Вот и закончился день, начался новый, пора отмечать что сделал, а что нет!", attachments=[checking_done_target_kb])
+                        except Exception as e:
+                            print(f"checking_done_target_kb ERROR {e}")
                         sent_count += 1
                     except Exception as e:
                         print(f"❌ Ошибка отправки пользователю {user.tid}: {e}")
@@ -47,7 +53,7 @@ def setup_midnight_messages(bot):
     
     scheduler.add_job(
         send_midnight_messages,
-        trigger=CronTrigger(hour=0, minute=53),
+        trigger=CronTrigger(hour=16, minute=53),
         id='midnight_messages'
     )
     

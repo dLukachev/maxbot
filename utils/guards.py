@@ -2,7 +2,7 @@ import functools
 from typing import Callable, Awaitable, Any
 from datetime import datetime
 
-from core.database.requests import TargetCRUD
+from core.database.requests import TargetCRUD, UserCRUD
 from utils.message_utils import update_menu
 from utils.states import UserStates
 from core.user_handlers.kb import stop_kb
@@ -28,15 +28,24 @@ def look_if_not_target(func: Callable[..., Awaitable[Any]]) -> Callable[..., Awa
                 return None
 
             if CACHE_.get(user_id, False):
+                print(f"NOT IN CACHE state = {user_state}")
                 result = await func(*args, **kwargs)
                 return result
 
-            targets = await TargetCRUD.get_all_target_today(user_id, datetime.today())
+            user, targets = await TargetCRUD.get_all_target_today(user_id, datetime.today())
 
+            print(f"User - {user}")
+            if user is None:
+                result = await func(*args, **kwargs)
+                return result
+
+            print(f"Targets - {targets}")
             if targets:
+                print(f"Do it func")
                 result = await func(*args, **kwargs)
                 return result
             else:
+                print(f"Get state UserStates.new_day")
                 await context.set_state(UserStates.new_day)
                 CACHE_[user_id] = True
 

@@ -4,6 +4,7 @@ from sqlalchemy import select, update, delete
 from sqlalchemy.exc import IntegrityError
 from core.database.models import async_session, User, Target, Session
 from sqlalchemy import and_
+from sqlalchemy.orm import selectinload
 
 EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 DurationInput = Union[int, float, timedelta]
@@ -277,14 +278,24 @@ class TargetCRUD:
         start_dt = datetime.combine(day, time.min) 
         next_day_dt = start_dt + timedelta(days=1)
         async with async_session() as session:
-            res = await session.execute(
+            # 1) Грузим пользователя
+            user_result = await session.execute(
+                select(User).where(User.id == user_id)
+            )
+            user = user_result.scalar_one_or_none()
+
+            # 2) Грузим таргеты за день
+            targets_result = await session.execute(
                 select(Target).where(
                     Target.user_id == user_id,
                     Target.date_add >= start_dt,
-                    Target.date_add <= next_day_dt,
+                    Target.date_add < next_day_dt,  # строгая верхняя граница
                 )
             )
-            return res.all()
+            targets = targets_result.scalars().all()
+
+            # 3) Возвращаем кортеж (user, targets)
+            return user, targets
 
 
 # ---------- Sessions ----------

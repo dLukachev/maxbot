@@ -12,7 +12,7 @@ class Item:
         self.is_done = is_done
 
 
-def inline_keyboard_from_items(items: List[List[Item]], callback_prefix: str):
+def inline_keyboard_from_items(items: List[Item], callback_prefix: str):
     kb = InlineKeyboardBuilder()
 
     if not items:
