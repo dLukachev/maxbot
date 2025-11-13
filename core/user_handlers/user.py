@@ -9,7 +9,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.StreamHandler(),  # вывод в консоль
+        logging.StreamHandler(),
     ]
 )
 
@@ -62,14 +62,16 @@ async def blocker(callback: MessageCallback, context: MemoryContext):
 @look_if_not_target
 async def handle_dialog_cleared(event: DialogCleared, context: MemoryContext):
     check = await UserCRUD.get_by_tid(event.from_user.user_id)
+    await event.bot.send_message(chat_id=event.chat_id, user_id=event.user.user_id, text = "для получения подробной информации о работе бота введите /help")
     if not check:
         await UserCRUD.create(tid=event.from_user.user_id, name=event.from_user.first_name, chat_id=event.chat_id, username=event.from_user.username)
-    await event.bot.send_message(chat_id=event.chat_id, user_id=event.user.user_id, text="Меню:", attachments=[start_kb]) # type: ignore
+    await event.bot.send_message(chat_id=event.chat_id, user_id=event.user.user_id, text="Главное меню:", attachments=[start_kb]) # type: ignore
 
 @user.bot_started()
 @look_if_not_target
 async def handle_bot_started(event: BotStarted, context: MemoryContext):
     check = await UserCRUD.get_by_tid(event.from_user.user_id)
+    await event.bot.send_message(chat_id=event.chat_id, user_id=event.user.user_id, text = "для получения подробной информации о работе бота введите /help")
     if not check:
         await UserCRUD.create(tid=event.from_user.user_id, chat_id=event.chat_id, name=event.from_user.first_name, username=event.from_user.username)
         await event.bot.send_message(chat_id=event.chat_id, user_id=event.user.user_id, text="Бла бла бла, цели поставь!",
@@ -80,9 +82,22 @@ async def handle_bot_started(event: BotStarted, context: MemoryContext):
 # ----------------- COMMANDS -----------------
 
 @user.message_created(Command("help"))
+@look_if_not_target
 async def help(message: MessageCreated, context: MemoryContext):
-    #await update_menu(context, message.message, text="привет")
-    await message.message.answer("help text", attachments=[button_in_help])
+    help_text = (
+        "👋 Привет! Я помогу тебе эффективно управлять задачами.\n\n"
+        "Как это работает (3 простых шага):\n\n"
+        "🧠 1. Создай цели\n"
+        "В разделе «Цели» составь свой план на день. Это основа всего. Ты можешь добавлять, изменять, удалять и отмечать выполненные задачи.\n\n"
+        "🎯 2. Запусти таймер (`Начать`)\n"
+        "Когда готов приступить к работе, нажми «Начать». Я покажу список твоих целей. Выбери ту, над которой будешь работать, и я запущу для нее персональный таймер. Когда закончишь, нажми «Стоп» — и время будет записано именно для этой цели.\n\n"
+        "👤 3. Профиль\n"
+        "В Профиле теперь отображается вся детальная статистика: твой уровень, очки, а также полный список целей с точным временем, затраченным на каждую. Если ты забыл(а) включить таймер, не страшно! Ты можешь изменить время для конкретной задачи прямо в профиле.\n\n"
+        "✨ Как зарабатывать очки?\n"
+        "Ты получаешь очки за выполнение целей. На твою награду влияет не только количество выполненных задач, но и процент их завершения от общего плана на день. Точные формулы — секрет, но главный совет прост: старайся выполнять всё, что запланировал(а), чтобы быстрее повышать свой уровень!\n\n"
+        "Удачи в достижении твоих целей!"
+    )
+    await message.message.answer(help_text, attachments=[button_in_help])
 
 
 @user.message_callback(F.callback.payload.in_({"back_wright_target", "not_right"}))
@@ -596,7 +611,8 @@ async def adjust_target_time_start(callback: MessageCallback, context: MemoryCon
     prompt = (
         f"Введите время для добавления к цели:\n"
         f"*{target.description}*\n\n"
-        f"Формат: `чч:мм:сс`. Для вычитания используйте минус, например `-00:10:00`."
+        f"Формат: `чч:мм:сс`. Для вычитания используйте минус, например `00:10:00`.\n"
+        f"Если хочешь убавить, то в формате чч:мм:-сс, важно, чтобы '-' был приписан к ненулевому числу, чтобы вычесть ровно минуту, нужно написать 00:-01:00."
     )
 
     await update_menu(context, callback.message, text=prompt, attachments=[back_to_profile_kb])
@@ -639,19 +655,6 @@ async def adjust_target_time_finish(message: MessageCreated, context: MemoryCont
 
     await context.set_state(UserStates.draw_new_prifile)
     await get_profile(message, context)
-
-@user.message_callback(F.callback.payload == "change_time")
-@look_if_not_target
-async def change_sum_time(callback: MessageCallback, context: MemoryContext):
-    prompt = (
-        "Напиши время, которое нужно прибавить в формате чч:мм:сс\n\n"
-        "Если хочешь убавить, то в формате чч:мм:-сс, важно, чтобы '-' был приписан к ненулевому числу, чтобы вычесть ровно минуту, нужно написать 00:-01:00"
-    )
-    try:
-        await callback.message.edit(text=prompt, attachments=[back_to_profile_kb]) # type: ignore
-    except Exception:
-        await update_menu(context, callback.message, text=prompt, attachments=[back_to_profile_kb]) # type: ignore
-    await context.set_state(UserStates.take_time)
 
 @user.message_created(UserStates.take_time)
 @look_if_not_target
