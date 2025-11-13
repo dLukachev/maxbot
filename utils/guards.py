@@ -2,7 +2,7 @@ import functools
 from typing import Callable, Awaitable, Any
 from datetime import datetime
 
-from core.database.requests import TargetCRUD, UserCRUD
+from core.database.requests import TargetCRUD
 from utils.message_utils import update_menu
 from utils.states import UserStates
 from core.user_handlers.kb import stop_kb

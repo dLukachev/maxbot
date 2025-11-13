@@ -13,10 +13,9 @@ logging.basicConfig(
     ]
 )
 
-from utils.states import FirstStates, UserStates
+from utils.states import UserStates
 from core.user_handlers.kb import (
     button_in_help,
-    wright_target,
     confirmation,
     start_kb,
     stop_kb,
@@ -60,7 +59,7 @@ async def handle_dialog_cleared(event: DialogCleared, context: MemoryContext):
     await event.bot.send_message(chat_id=event.chat_id, user_id=event.user.user_id, text="Меню:", attachments=[start_kb]) # type: ignore
 
 @user.bot_started()
-async def handle_bot_starterd(event: BotStarted):
+async def handle_bot_started(event: BotStarted):
     check = await UserCRUD.get_by_tid(event.from_user.user_id)
     if not check:
         await UserCRUD.create(tid=event.from_user.user_id, chat_id=event.chat_id, name=event.from_user.first_name, username=event.from_user.username)
@@ -263,7 +262,6 @@ async def delete_target(callback: MessageCallback, context: MemoryContext):
 @user.message_callback(F.callback.payload.startswith("delete:"))
 @look_if_not_target
 async def delete_target_callback(callback: MessageCallback, context: MemoryContext):
-    # Toggle selection for deletion and update keyboard
     payload = callback.callback.payload
     if not payload:
         await update_menu(context, callback.message, text="Не вижу такой задачи:(")
@@ -283,7 +281,6 @@ async def delete_target_callback(callback: MessageCallback, context: MemoryConte
 
     await context.set_data({'items': items, 'pending_delete': list(pending)})
 
-    # rebuild keyboard
     model_groups = []
     for group in items:
         row = []
