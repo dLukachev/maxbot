@@ -60,10 +60,14 @@ async def handle_dialog_cleared(event: DialogCleared, context: MemoryContext):
     await event.bot.send_message(chat_id=event.chat_id, user_id=event.user.user_id, text="Меню:", attachments=[start_kb]) # type: ignore
 
 @user.bot_started()
-async def handle_bot_started(event: BotStarted):
+@look_if_not_target
+async def handle_bot_started(event: BotStarted, context: MemoryContext):
     check = await UserCRUD.get_by_tid(event.from_user.user_id)
     if not check:
         await UserCRUD.create(tid=event.from_user.user_id, chat_id=event.chat_id, name=event.from_user.first_name, username=event.from_user.username)
+        await event.bot.send_message(chat_id=event.chat_id, user_id=event.user.user_id, text="Бла бла бла, цели поставь!",
+                                     attachments=[create_new_target_kb])  # type: ignore
+        return
     await event.bot.send_message(chat_id=event.chat_id, user_id=event.user.user_id, text="Меню:", attachments=[start_kb]) # type: ignore
 
 # ----------------- COMMANDS -----------------
@@ -474,6 +478,7 @@ async def start_session_choose_target(message: MessageCallback, context: MemoryC
     await context.set_state(UserStates.choosing_target_for_session)
 
 @user.message_callback(F.callback.payload.startswith("start_target:"), UserStates.choosing_target_for_session)
+@look_if_not_target
 async def start_going(callback: MessageCallback, context: MemoryContext):
     target_id_str = callback.callback.payload.split(":")[1]
     if not target_id_str.isdigit():
@@ -486,6 +491,7 @@ async def start_going(callback: MessageCallback, context: MemoryContext):
     session = await SessionCRUD.get_active_session(callback.from_user.user_id)
     if session:
         await update_menu(context, callback.message, text="У тебя уже открыта сессия...", attachments=[stop_kb])
+        await context.set_state(UserStates.counted_time)
         return
 
     now = datetime.now(UTC_PLUS_3)
