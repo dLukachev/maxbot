@@ -27,7 +27,7 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tid: Mapped[int | None] = mapped_column(BigInteger, unique=True, index=True)  # внешний ID (напр., телеграм)
+    tid: Mapped[int | None] = mapped_column(BigInteger, unique=True, index=True)
     chat_id: Mapped[int] = mapped_column(BigInteger, default=0)
     name: Mapped[str | None] = mapped_column(String(255))
     username: Mapped[str | None] = mapped_column(String(255))
@@ -39,7 +39,6 @@ class User(Base):
     date_add: Mapped[DateTime] = mapped_column(DateTime, default=datetime.now(UTC_PLUS_3))
     count_time: Mapped[str | None] = mapped_column(DateTime, nullable=True)
 
-    # Связи
     targets: Mapped[list["Target"]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
@@ -69,6 +68,8 @@ class Target(Base):
 
     user: Mapped[User] = relationship(back_populates="targets")
 
+    sessions: Mapped[list["Session"]] = relationship(back_populates="target")
+
     def __repr__(self) -> str:
         return f"<Target id={self.id} user_id={self.user_id} done={self.is_done}>"
 
@@ -81,6 +82,14 @@ class Session(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         index=True,
     )
+
+    target_id: Mapped[int | None] = mapped_column(
+        ForeignKey("targets.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True
+    )
+
+
     date_start: Mapped[datetime] = mapped_column(DateTime)
     date_end: Mapped[datetime] = mapped_column(DateTime)
     is_active: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -88,12 +97,11 @@ class Session(Base):
 
     user: Mapped[User] = relationship(back_populates="sessions")
 
+    target: Mapped["Target"] = relationship(back_populates="sessions")
+
     def __repr__(self) -> str:
         return f"<Session id={self.id} user_id={self.user_id} date_start={self.date_start} date_end={self.date_end} active={self.is_active}>"
 
-
-
-# Инициализация БД (создание таблиц)
 async def async_main():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
