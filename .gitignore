@@ -1,8 +1,10 @@
 .env
 .vevn
+.venv
 __pycache__/
 .DS_Store
 .github
 .dockerignore
 *.sqlite3
 открой.md
+.idea
