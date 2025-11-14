@@ -111,7 +111,7 @@ def create_profile_targets_keyboard(targets_with_time: list):
     """
     kb = InlineKeyboardBuilder()
     if not targets_with_time:
-        kb.row(CallbackButton(text="У вас пока нет целей (Добавить)", payload="get_targets"))
+        kb.row(CallbackButton(text="У Вас пока нет целей, нажмите кнопку чтобы добавить", payload="get_targets"))
     else:
         for target, time_str in targets_with_time:
             kb.row(
@@ -261,14 +261,14 @@ def inline_keyboard_from_items_with_checks_finally(items: List[List[Item]], chec
             kb.row(*row)
 
     kb.row(
-        CallbackButton(text="Готово1", payload="commit_finally_done"),
-        CallbackButton(text="Назад1", payload="cancel_change_finally_target")
+        CallbackButton(text="Готово", payload="commit_finally_done"),
+        CallbackButton(text="Назад", payload="cancel_change_finally_target")
     )
     return kb.as_markup()
 
 def create_new_target():
     kb = InlineKeyboardBuilder()
-    kb.row(CallbackButton(text="Газ!!!", payload="create_new_target"))
+    kb.row(CallbackButton(text="Поставить цели", payload="create_new_target"))
     return kb.as_markup()
 
 create_new_target_kb = create_new_target()
