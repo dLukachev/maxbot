@@ -6,6 +6,7 @@ from utils.random_text import get_text
 
 class Item:
     """Модель элемента (цель, задача и т.д.)"""
+
     def __init__(self, id: int, description: str, is_done: bool = False):
         self.id = id
         self.description = description
@@ -16,24 +17,26 @@ def inline_keyboard_from_items(items: List[Item], callback_prefix: str):
     kb = InlineKeyboardBuilder()
 
     if not items:
-        kb.row(
-            CallbackButton(text="Ошибка!", payload="ERROR")
-        )
+        kb.row(CallbackButton(text="Ошибка!", payload="ERROR"))
         return kb.as_markup()
 
     index = 1
     for item in items:
-        kb.row(CallbackButton(
+        kb.row(
+            CallbackButton(
                 text=f"{index}. {item.description}",
-                payload=f"{callback_prefix}:{item.id}"
-            ))
-            
+                payload=f"{callback_prefix}:{item.id}",
+            )
+        )
+
     kb.row(CallbackButton(text="Назад", payload="back_to_menu"))
 
     return kb.as_markup()
 
 
-def inline_keyboard_from_items_with_checks(items: List[List[Item]], checked_ids: set[int], callback_prefix: str):
+def inline_keyboard_from_items_with_checks(
+    items: List[List[Item]], checked_ids: set[int], callback_prefix: str
+):
     """
     Построить inline-клавиатуру где у каждой кнопки есть чекбокс, отражающий checked_ids.
     checked_ids: set of target.id, отмеченные как выбранные (готовые).
@@ -43,9 +46,7 @@ def inline_keyboard_from_items_with_checks(items: List[List[Item]], checked_ids:
     kb = InlineKeyboardBuilder()
 
     if not items:
-        kb.row(
-            CallbackButton(text="Ошибка!", payload="ERROR")
-        )
+        kb.row(CallbackButton(text="Ошибка!", payload="ERROR"))
         return kb.as_markup()
 
     index = 1
@@ -57,7 +58,7 @@ def inline_keyboard_from_items_with_checks(items: List[List[Item]], checked_ids:
             row.append(
                 CallbackButton(
                     text=f"{checked}{index}. {item.description}",
-                    payload=f"{callback_prefix}:{item.id}"
+                    payload=f"{callback_prefix}:{item.id}",
                 )
             )
             index += 1
@@ -67,13 +68,15 @@ def inline_keyboard_from_items_with_checks(items: List[List[Item]], checked_ids:
     # Контролы внизу: Готово (commit) и Отмена
     kb.row(
         CallbackButton(text="Готово", payload="commit_done"),
-        CallbackButton(text="Назад", payload="cancel_change_target")
+        CallbackButton(text="Назад", payload="cancel_change_target"),
     )
 
     return kb.as_markup()
 
 
-def inline_keyboard_from_items_for_delete(items: List[List[Item]], selected_ids: set[int], callback_prefix: str):
+def inline_keyboard_from_items_for_delete(
+    items: List[List[Item]], selected_ids: set[int], callback_prefix: str
+):
     """
     Построить inline-клавиатуру для выбора на удаление. Показывает '🗑️' для выбранных и '❌' для не выбранных.
     Внизу добавляет кнопки "Удалить" (commit_delete) и "Отмена" (cancel_delete).
@@ -89,9 +92,16 @@ def inline_keyboard_from_items_for_delete(items: List[List[Item]], selected_ids:
         row = []
         for item in group:
             # If item already done, show ✅ as secondary indicator; selection for deletion overrides marker
-            sel_mark = "🗑️ " if item.id in selected_ids else ("✅ " if getattr(item, 'is_done', False) else "❌ ")
+            sel_mark = (
+                "🗑️ "
+                if item.id in selected_ids
+                else ("✅ " if getattr(item, "is_done", False) else "❌ ")
+            )
             row.append(
-                CallbackButton(text=f"{sel_mark}{index}. {item.description}", payload=f"{callback_prefix}:{item.id}")
+                CallbackButton(
+                    text=f"{sel_mark}{index}. {item.description}",
+                    payload=f"{callback_prefix}:{item.id}",
+                )
             )
             index += 1
         if row:
@@ -99,10 +109,11 @@ def inline_keyboard_from_items_for_delete(items: List[List[Item]], selected_ids:
 
     kb.row(
         CallbackButton(text="Удалить", payload="commit_delete"),
-        CallbackButton(text="Назад", payload="cancel_delete")
+        CallbackButton(text="Назад", payload="cancel_delete"),
     )
 
     return kb.as_markup()
+
 
 def create_profile_targets_keyboard(targets_with_time: list):
     """
@@ -111,13 +122,18 @@ def create_profile_targets_keyboard(targets_with_time: list):
     """
     kb = InlineKeyboardBuilder()
     if not targets_with_time:
-        kb.row(CallbackButton(text="У Вас пока нет целей, нажмите кнопку чтобы добавить", payload="get_targets"))
+        kb.row(
+            CallbackButton(
+                text="У Вас пока нет целей, нажмите кнопку чтобы добавить",
+                payload="get_targets",
+            )
+        )
     else:
         for target, time_str in targets_with_time:
             kb.row(
                 CallbackButton(
-                    text=f"🎯 {target.description[:25]}... ({time_str})", # Обрезаем длинные названия
-                    payload=f"adjust_time:{target.id}"
+                    text=f"🎯 {target.description[:25]}... ({time_str})",  # Обрезаем длинные названия
+                    payload=f"adjust_time:{target.id}",
                 )
             )
 
@@ -128,33 +144,40 @@ def create_profile_targets_keyboard(targets_with_time: list):
 
 def change_time_activity():
     kb = InlineKeyboardBuilder()
-    kb.row(CallbackButton(text="Изменить общее время", payload="change_time")) # type: ignore
+    kb.row(CallbackButton(text="Изменить общее время", payload="change_time"))  # type: ignore
     # Добавляем кнопку Отмена, чтобы можно было вернуться в главное меню
-    kb.row(CallbackButton(text="Назад", payload="back_to_menu")) # type: ignore
+    kb.row(CallbackButton(text="Назад", payload="back_to_menu"))  # type: ignore
     return kb.as_markup()
 
+
 change_time_activity_kb = change_time_activity()
+
 
 def back_to_profile_handler():
     kb = InlineKeyboardBuilder()
     kb.row(CallbackButton(text="Назад", payload="get_profile"))
     return kb.as_markup()
 
+
 back_to_profile_kb = back_to_profile_handler()
+
 
 def cancel_button():
     kb = InlineKeyboardBuilder()
-    kb.row(CallbackButton(text="Назад", payload="cancel_change_target")) # type: ignore
+    kb.row(CallbackButton(text="Назад", payload="cancel_change_target"))  # type: ignore
     return kb.as_markup()
+
 
 cancel_button_kb = cancel_button()
 
+
 def create_wright_target_keyboard():
     kb = InlineKeyboardBuilder()
-    kb.row(CallbackButton(text=get_text('wright_target'), payload="back_wright_target")) # type: ignore
+    kb.row(CallbackButton(text=get_text("wright_target"), payload="back_wright_target"))  # type: ignore
     # кнопка отмены возвращает на уровень выше (в главное меню)
-    kb.row(CallbackButton(text="Отмена", payload="back_to_menu")) # type: ignore
+    kb.row(CallbackButton(text="Отмена", payload="back_to_menu"))  # type: ignore
     return kb.as_markup()
+
 
 wright_target = create_wright_target_keyboard()
 
@@ -169,6 +192,7 @@ def create_change_target_keyboard():
     kb.row(CallbackButton(text="Назад", payload="back_to_menu"))
     return kb.as_markup()
 
+
 change_target = create_change_target_keyboard()
 
 
@@ -178,58 +202,71 @@ def create_confirmation_keyboard():
     kb.row(CallbackButton(text="Назад", payload="back_to_menu"))
     return kb.as_markup()
 
+
 confirmation = create_confirmation_keyboard()
+
 
 def back_to_main_menue_button_in_help():
     kb = InlineKeyboardBuilder()
     kb.row(CallbackButton(text="Запуск", payload="back_to_menu"))
     return kb.as_markup()
 
+
 button_in_help = back_to_main_menue_button_in_help()
+
 
 def create_confirmation_keyboard_finally():
     kb = InlineKeyboardBuilder()
     kb.row(CallbackButton(text="Да", payload="right"))
     return kb.as_markup()
 
+
 confirmation_finally = create_confirmation_keyboard_finally()
+
 
 def create_start_keyboard():
     """Основная стартовая клавиатура."""
     kb = InlineKeyboardBuilder()
     kb.row(
-        CallbackButton(text='Начать 🎯', payload='start_session'),
-        CallbackButton(text='Профиль 👤', payload='get_profile'),
-        CallbackButton(text='Цели 🧠', payload='get_targets')
+        CallbackButton(text="Начать 🎯", payload="start_session"),
+        CallbackButton(text="Профиль 👤", payload="get_profile"),
+        CallbackButton(text="Цели 🧠", payload="get_targets"),
     )
     return kb.as_markup()
 
+
 start_kb = create_start_keyboard()
+
 
 def create_stop_keyboard():
     """Клавиатура для остановки."""
     kb = InlineKeyboardBuilder()
     kb.row(
-        CallbackButton(text='Стоп ❌', payload='stop_session'),
-        CallbackButton(text='Профиль 👤', payload='get_profile'),
-        CallbackButton(text='Цели 🧠', payload='get_targets')
+        CallbackButton(text="Стоп ❌", payload="stop_session"),
+        CallbackButton(text="Профиль 👤", payload="get_profile"),
+        CallbackButton(text="Цели 🧠", payload="get_targets"),
     )
     return kb.as_markup()
 
+
 stop_kb = create_stop_keyboard()
+
 
 def checking_done_target():
     kb = InlineKeyboardBuilder()
     kb.row(
         CallbackButton(text="Отметить выполненное", payload="target_is_done_finally"),
-        CallbackButton(text="Готово", payload="day_is_done_finally")
+        CallbackButton(text="Готово", payload="day_is_done_finally"),
     )
     return kb.as_markup()
+
 
 checking_done_target_kb = checking_done_target()
 
 
-def inline_keyboard_from_items_with_checks_finally(items: List[List[Item]], checked_ids: set[int], callback_prefix: str):
+def inline_keyboard_from_items_with_checks_finally(
+    items: List[List[Item]], checked_ids: set[int], callback_prefix: str
+):
     """
     Построить inline-клавиатуру где у каждой кнопки есть чекбокс, отражающий checked_ids.
     checked_ids: set of target.id, отмеченные как выбранные (готовые).
@@ -239,9 +276,7 @@ def inline_keyboard_from_items_with_checks_finally(items: List[List[Item]], chec
     kb = InlineKeyboardBuilder()
 
     if not items:
-        kb.row(
-            CallbackButton(text="Ошибка!", payload="ERROR")
-        )
+        kb.row(CallbackButton(text="Ошибка!", payload="ERROR"))
         return kb.as_markup()
 
     index = 1
@@ -253,7 +288,7 @@ def inline_keyboard_from_items_with_checks_finally(items: List[List[Item]], chec
             row.append(
                 CallbackButton(
                     text=f"{checked}{index}. {item.description}",
-                    payload=f"{callback_prefix}:{item.id}"
+                    payload=f"{callback_prefix}:{item.id}",
                 )
             )
             index += 1
@@ -262,13 +297,15 @@ def inline_keyboard_from_items_with_checks_finally(items: List[List[Item]], chec
 
     kb.row(
         CallbackButton(text="Готово", payload="commit_finally_done"),
-        CallbackButton(text="Назад", payload="cancel_change_finally_target")
+        CallbackButton(text="Назад", payload="cancel_change_finally_target"),
     )
     return kb.as_markup()
+
 
 def create_new_target():
     kb = InlineKeyboardBuilder()
     kb.row(CallbackButton(text="Поставить цели", payload="create_new_target"))
     return kb.as_markup()
+
 
 create_new_target_kb = create_new_target()

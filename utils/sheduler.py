@@ -9,16 +9,17 @@ from core.user_handlers.kb import checking_done_target_kb
 
 from utils.guards import CACHE_
 
+
 def setup_midnight_messages(bot):
     """
     Настраивает асинхронную отправку сообщений всем пользователям в 12 ночи
     """
-    
+
     async def send_midnight_messages():
         """Асинхронная функция для отправки сообщений всем пользователям"""
         try:
             print(f"🚀 Запуск ночной рассылки в {datetime.now(UTC_PLUS_3)}")
-            
+
             # Асинхронно получаем список пользователей
             users = list(await UserCRUD.list())
             next_users = 101
@@ -32,7 +33,11 @@ def setup_midnight_messages(bot):
                         except Exception as e:
                             print(f"stop_one_sessions ERROR {e}")
                         try:
-                            await bot.send_message(user_id=user.tid, text="Вот и закончился день, начался новый, пора отмечать что сделал, а что нет!", attachments=[checking_done_target_kb])
+                            await bot.send_message(
+                                user_id=user.tid,
+                                text="Вот и закончился день, начался новый, пора отмечать что сделал, а что нет!",
+                                attachments=[checking_done_target_kb],
+                            )
                         except Exception as e:
                             print(f"checking_done_target_kb ERROR {e}")
                         sent_count += 1
@@ -41,23 +46,27 @@ def setup_midnight_messages(bot):
                 if len(users) == 100:
                     users = list(await UserCRUD.list(offset=next_users))
                     next_users += 100
-                    print(f"✅ Рассылка завершена. Успешно отправлено: {sent_count}/{len(users)}")
+                    print(
+                        f"✅ Рассылка завершена. Успешно отправлено: {sent_count}/{len(users)}"
+                    )
                 else:
-                    print(f"✅ Рассылка завершена. Успешно отправлено: {sent_count}/{len(users)}")
+                    print(
+                        f"✅ Рассылка завершена. Успешно отправлено: {sent_count}/{len(users)}"
+                    )
                     break
-            
+
         except Exception as e:
             print(f"❌ Критическая ошибка в рассылке: {e}")
-    
+
     scheduler = AsyncIOScheduler()
-    
+
     scheduler.add_job(
         send_midnight_messages,
         trigger=CronTrigger(hour=16, minute=53),
-        id='midnight_messages'
+        id="midnight_messages",
     )
-    
+
     scheduler.start()
-    
+
     print("⏰ Асинхронная рассылка в 00:00 настроена!")
     return scheduler

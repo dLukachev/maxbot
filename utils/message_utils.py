@@ -5,8 +5,12 @@ from maxapi.types.input_media import InputMedia, InputMediaBuffer
 from maxapi.types import MessageCreated, MessageCallback
 
 
-async def update_menu(context, source_message: Any, text: Optional[str] = None,
-                      attachments: Optional[List[Attachment | InputMedia | InputMediaBuffer]] = None):
+async def update_menu(
+    context,
+    source_message: Any,
+    text: Optional[str] = None,
+    attachments: Optional[List[Attachment | InputMedia | InputMediaBuffer]] = None,
+):
     """
     Try to update a single 'menu' message across the conversation.
 
@@ -22,13 +26,17 @@ async def update_menu(context, source_message: Any, text: Optional[str] = None,
     except Exception:
         data = {}
 
-    bot = getattr(source_message, 'bot', None) or getattr(source_message, 'message', None) and getattr(source_message.message, 'bot', None)
+    bot = (
+        getattr(source_message, "bot", None)
+        or getattr(source_message, "message", None)
+        and getattr(source_message.message, "bot", None)
+    )
 
-    menu_mid = data.get('menu_mid')
+    menu_mid = data.get("menu_mid")
     # 1) try bot.edit_message by stored mid
     if menu_mid and bot:
         try:
-            res = await bot.edit_message(message_id=menu_mid, text=text, attachments=attachments) # type: ignore
+            res = await bot.edit_message(message_id=menu_mid, text=text, attachments=attachments)  # type: ignore
             return res
         except Exception:
             # fall through to other options
@@ -36,11 +44,11 @@ async def update_menu(context, source_message: Any, text: Optional[str] = None,
 
     # 2) try to edit the provided source_message (works for callback.message)
     try:
-        res = await source_message.edit(text=text, attachments=attachments) # type: ignore
+        res = await source_message.edit(text=text, attachments=attachments)  # type: ignore
         # store mid in context if possible
         try:
             mid = source_message.body.mid
-            data['menu_mid'] = mid
+            data["menu_mid"] = mid
             await context.set_data(data)
         except Exception:
             pass
@@ -50,10 +58,10 @@ async def update_menu(context, source_message: Any, text: Optional[str] = None,
 
     # 3) fallback: send new message and remember its mid
     try:
-        sent = await source_message.answer(text=text, attachments=attachments) # type: ignore
+        sent = await source_message.answer(text=text, attachments=attachments)  # type: ignore
         try:
             mid = sent.message.mid
-            data['menu_mid'] = mid
+            data["menu_mid"] = mid
             await context.set_data(data)
         except Exception:
             pass

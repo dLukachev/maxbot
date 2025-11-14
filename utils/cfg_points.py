@@ -5,9 +5,11 @@ from datetime import datetime, timedelta
 
 config = configparser.ConfigParser()
 
+
 def get_levels_config(config_path="config.ini"):
-    config.read(config_path, encoding='utf-8-sig')
+    config.read(config_path, encoding="utf-8-sig")
     return dict(config["levels"])
+
 
 async def check_level(user_id) -> bool:
     user = await UserCRUD.get_by_tid(user_id)
@@ -37,6 +39,7 @@ async def check_level(user_id) -> bool:
 
     return True
 
+
 def xyz(total_target, count_done_target, boost):
     """
     total_target - всего целей
@@ -44,6 +47,7 @@ def xyz(total_target, count_done_target, boost):
     boost - коэф в формуле (чем больше значение, тем больше понитов)
     """
     return int((count_done_target / total_target) * 3 * boost)
+
 
 async def calculate_points_and_level(user_id: int) -> None:
     """Производит расчет поинтов и обновление уровня, если поинтов достаточно
