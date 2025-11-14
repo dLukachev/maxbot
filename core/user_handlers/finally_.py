@@ -16,6 +16,9 @@ from core.user_handlers.kb import (
 from utils.message_utils import update_menu
 from core.database.requests import TargetCRUD
 from utils.cfg_points import calculate_points_and_level
+from utils.random_text import get_text
+
+ERROR_TEXT = "Произошла ошибка! Попробуйте снова("
 
 logging.basicConfig(
     level=logging.INFO,
@@ -38,9 +41,13 @@ async def make_target_is_done_finally(
     items = await TargetCRUD.get_all_target_today(callback.from_user.user_id, datetime.today())  # type: ignore
     if not items:
         try:
-            await callback.message.edit("Целей нет:( СТАВЬ!!!", attachments=[])
+            await callback.message.edit(
+                get_text("instructions_for_wrighting"), attachments=[]
+            )
         except Exception:
-            await callback.message.answer("Целей нет:( СТАВЬ!!!", attachments=[])
+            await callback.message.answer(
+                get_text("instructions_for_wrighting"), attachments=[]
+            )
         return
 
     initial_checked = set()
@@ -59,7 +66,7 @@ async def make_target_is_done_finally(
 
     try:
         try:
-            await callback.message.edit(text="Выбери что ты выполнил(а) f:", attachments=[inline_keyboard_from_items_with_checks_finally(model_groups, initial_checked, "finally_done")])  # type: ignore
+            await callback.message.edit(text="Выбери что ты выполнил(а):", attachments=[inline_keyboard_from_items_with_checks_finally(model_groups, initial_checked, "finally_done")])  # type: ignore
         except Exception:
             await update_menu(
                 context,
@@ -72,7 +79,7 @@ async def make_target_is_done_finally(
                 ],
             )  # type: ignore
     except Exception:
-        await callback.message.answer(context, callback.message, text="Выбери что ты выполнил(а) f:", attachments=[inline_keyboard_from_items_with_checks_finally(model_groups, initial_checked, "finally_done")])  # type: ignore
+        await callback.message.answer(context, callback.message, text="Выбери что ты выполнил(а):", attachments=[inline_keyboard_from_items_with_checks_finally(model_groups, initial_checked, "finally_done")])  # type: ignore
 
 
 @user_finally.message_callback(F.callback.payload.startswith("finally_done:"))
@@ -86,7 +93,7 @@ async def take_id_and_change_finally_isdone(
     # Toggle target in pending_done list stored in context, then update the keyboard shown to the user.
     payload = callback.callback.payload
     if not payload:
-        await update_menu(context, callback.message, text="Ошибка! Хз почему, но айди не вижу(")  # type: ignore
+        await update_menu(context, callback.message, text=ERROR_TEXT)  # type: ignore
         return
     target_id = int(payload.split(":")[1])
 
@@ -113,10 +120,10 @@ async def take_id_and_change_finally_isdone(
         model_groups.append(row)
 
     try:
-        await callback.message.edit(text="Выбери что ты выполнил(а) f1:", attachments=[inline_keyboard_from_items_with_checks_finally(model_groups, pending, "finally_done")])  # type: ignore
+        await callback.message.edit(text="Выбери что ты выполнил(а):", attachments=[inline_keyboard_from_items_with_checks_finally(model_groups, pending, "finally_done")])  # type: ignore
     except Exception:
         # fallback to creating/updating the persistent menu when edit is not available
-        await update_menu(context, callback.message, text="Выбери что ты выполнил(а) f1:", attachments=[inline_keyboard_from_items_with_checks_finally(model_groups, pending, "finally_done")])  # type: ignore
+        await update_menu(context, callback.message, text="Выбери что ты выполнил(а):", attachments=[inline_keyboard_from_items_with_checks_finally(model_groups, pending, "finally_done")])  # type: ignore
 
 
 @user_finally.message_callback(F.callback.payload == "commit_finally_done")
@@ -127,13 +134,10 @@ async def commit_done_handler_finally(
     pending = set(data.get("pending_done", []))
     items = data.get("items", [])
     if not items:
-        # TODO: тут потенциально может быть ошибка, добавить кб с отменой(кнопкой назад)
         await update_menu(context, callback.message, text="Нет задач для подтверждения.")  # type: ignore
         await context.clear()
         return
 
-    # Применяем изменения к БД: для каждой задачи из items — если её id в pending, отмечаем is_done=True, иначе оставляем без изменений,
-    # Чтобы минимизировать число запросов — обновляем только выбранные
     applied = 0
     for group in items:
         for t in group:
@@ -141,7 +145,6 @@ async def commit_done_handler_finally(
                 await TargetCRUD.update(target_id=t.id, is_done=True)  # type: ignore
                 applied += 1
 
-    # Применяем изменения: синхронизируем состояния is_done так, как указано в pending (desired)
     desired = pending
     applied = 0
     removed = 0
@@ -166,9 +169,6 @@ async def commit_done_handler_finally(
         )
 
 
-# TODO: обработка отмена cancel_change_finally_target
-# должна быть отправка сообщения
-# text="Вот и закончился день, начался новый, пора отмечать что сделал, а что нет!"
 @user_finally.message_callback(F.callback.payload == "cancel_change_finally_target")
 async def cancel_change_finally_target(
     callback: MessageCallback, context: MemoryContext

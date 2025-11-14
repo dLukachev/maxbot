@@ -25,7 +25,6 @@ async def check_level(user_id) -> bool:
     sorted_thresholds = sorted(levels_cfg.keys())
     new_level = user.level
 
-    # Пройдемся по порогам и найдем максимальный достигнутый уровень
     for threshold in sorted_thresholds:
         if user.points >= int(threshold):
             candidate_level = levels_cfg[threshold]
@@ -52,16 +51,6 @@ def xyz(total_target, count_done_target, boost):
 async def calculate_points_and_level(user_id: int) -> None:
     """Производит расчет поинтов и обновление уровня, если поинтов достаточно
     Args: user_id"""
-    # if time_work > 3 hours + 2 points
-    # count add point = formula()
-    # if not target = -10 points
-
-    # in SessionCRUD.list_by_user_on_date(user_id, datetime.now()) we can
-    # check all session on today
-
-    # in TargetCRUD.get_all_target_today(user_id, datetime.now()) we can see
-    # all target today
-
     try:
         _, targets = await TargetCRUD.get_all_target_today(user_id, datetime.today())
     except Exception as e:
