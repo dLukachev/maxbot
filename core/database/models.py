@@ -1,3 +1,5 @@
+import os
+
 from sqlalchemy import (
     ForeignKey,
     String,
@@ -6,13 +8,16 @@ from sqlalchemy import (
     Boolean,
     DateTime,
 )
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase, relationship
 from sqlalchemy.ext.asyncio import AsyncAttrs, async_sessionmaker, create_async_engine
 from utils.dates import UTC_PLUS_3
+from dotenv import load_dotenv
+
+load_dotenv()
 
 engine = create_async_engine(
-    url="sqlite+aiosqlite:///db.sqlite3",
+    url=os.getenv("DATABASE_URL"),
     echo=False,
 )
 
