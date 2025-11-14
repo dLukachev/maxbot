@@ -193,10 +193,9 @@ async def make_target_is_done(callback: MessageCallback, context: MemoryContext)
         model_groups.append(row)
 
     try:
-        await callback.message.edit(text="Выбери что ты выполнил(а) nf1:", attachments=[inline_keyboard_from_items_with_checks(model_groups, initial_checked, "done")]) # type: ignore
+        await callback.message.edit(text="Выбери что ты выполнил(а):", attachments=[inline_keyboard_from_items_with_checks(model_groups, initial_checked, "done")]) # type: ignore
     except Exception:
-        await update_menu(context, callback.message, text="Выбери что ты выполнил(а) nf1:", attachments=[inline_keyboard_from_items_with_checks(model_groups, initial_checked, "done")]) # type: ignore
-    # оставляем состояние прежним (не переключаем стейт)
+        await update_menu(context, callback.message, text="Выбери что ты выполнил(а):", attachments=[inline_keyboard_from_items_with_checks(model_groups, initial_checked, "done")]) # type: ignore
 
 @user.message_callback(F.callback.payload == "cancel_change_target")
 @look_if_not_target

@@ -14,7 +14,8 @@ from core.user_handlers.kb import (
 )
 
 from utils.message_utils import update_menu
-from core.database.requests import TargetCRUD, UserCRUD
+from core.database.requests import TargetCRUD
+from utils.cfg_points import calculate_points_and_level
 
 logging.basicConfig(
     level=logging.INFO,
@@ -151,12 +152,9 @@ async def cancel_change_finally_target(callback: MessageCallback, context: Memor
     except Exception:
         await callback.message.answer('Если ничего не забыл отметить, то жми "готово"!', attachments=[checking_done_target_kb])
 
-# TODO: обработка кнопки day_is_done_finally
-# тут отдается приказ сделать расчеты по поинтам,
-# а так же отправить сообщение с кнопкой, чтобы поставить новые цели
 @user_finally.message_callback(F.callback.payload == "day_is_done_finally")
 async def day_is_done_finally(callback: MessageCallback, context: MemoryContext):
-    # ОТДАТЬ ПРИКАЗ РАССЧИТАТЬ ПОИНТЫ!!!!!
+    await calculate_points_and_level(callback.from_user.user_id)
     try:
         await update_menu(context, callback.message, text="Теперь пора ставить новые цели, жми кнопку как будешь готов", attachments=[create_new_target_kb])  # type: ignore
     except Exception:

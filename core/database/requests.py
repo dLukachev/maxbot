@@ -280,7 +280,7 @@ class TargetCRUD:
         async with async_session() as session:
             # 1) Грузим пользователя
             user_result = await session.execute(
-                select(User).where(User.id == user_id)
+                select(User).where(User.tid == user_id)
             )
             user = user_result.scalar_one_or_none()
 
