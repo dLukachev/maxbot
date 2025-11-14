@@ -4,7 +4,6 @@ UTC_PLUS_3 = timezone(timedelta(hours=3))
 EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
 def format_duration(td):
-    """Человеческое форматирование timedelta: HH:MM:SS."""
     total_seconds = int(td.total_seconds())
     hours = total_seconds // 3600
     minutes = (total_seconds % 3600) // 60
@@ -12,10 +11,6 @@ def format_duration(td):
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 def format_total_duration(count_time_dt: datetime | None) -> str:
-    """
-    Преобразует DateTime вида EPOCH+seconds в строку HH:MM:SS.
-    Если None — возвращает 00:00:00.
-    """
     if not count_time_dt:
         return "00:00:00"
 
@@ -31,7 +26,6 @@ def format_total_duration(count_time_dt: datetime | None) -> str:
 
 
 def hhmmss_to_seconds(value: str) -> int | None:
-    """Конвертирует 'HH:MM:SS' в целые секунды."""
     try:
         h, m, s = value.split(":")
         return int(h) * 3600 + int(m) * 60 + int(s)
@@ -39,7 +33,6 @@ def hhmmss_to_seconds(value: str) -> int | None:
         return None
 
 def hhmmss_to_timedelta(value: str) -> timedelta | None:
-    """Конвертирует 'HH:MM:SS' в datetime.timedelta."""
     seconds=hhmmss_to_seconds(value)
     if seconds == None:
         return

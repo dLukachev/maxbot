@@ -4,7 +4,6 @@ from utils.dates import UTC_PLUS_3
 from core.database.requests import SessionCRUD
 
 async def stop_all_sessions(bot):
-    """Функция смотрит все активные сессии в бд и закрывает их."""
     sessions = await SessionCRUD.get_all_active_session()
     now = datetime.now(UTC_PLUS_3)
     now = now.replace(tzinfo=None)

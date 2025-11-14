@@ -8,7 +8,7 @@ from sqlalchemy import and_
 EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 DurationInput = Union[int, float, timedelta]
 
-# ---------- Users ----------
+
 class UserCRUD:
     @staticmethod
     async def create(
@@ -21,7 +21,14 @@ class UserCRUD:
         count_time: Optional[str | None] = None,
     ) -> User:
         async with async_session() as session:
-            user = User(tid=tid, name=name, username=username, points=points, level=level, count_time=count_time)
+            user = User(
+                tid=tid,
+                name=name,
+                username=username,
+                points=points,
+                level=level,
+                count_time=count_time,
+            )
             session.add(user)
             try:
                 await session.commit()
@@ -46,7 +53,9 @@ class UserCRUD:
     @staticmethod
     async def list(limit: int = 100, offset: int = 0) -> Sequence[User]:
         async with async_session() as session:
-            res = await session.execute(select(User).order_by(User.id).limit(limit).offset(offset))
+            res = await session.execute(
+                select(User).order_by(User.id).limit(limit).offset(offset)
+            )
             return res.scalars().all()
 
     @staticmethod
@@ -63,19 +72,29 @@ class UserCRUD:
         tid: Optional[int] = None,
     ) -> Optional[User]:
         values = {}
-        if name is not None: values["name"] = name
-        if username is not None: values["username"] = username
-        if points is not None: values["points"] = points
-        if level is not None: values["level"] = level
-        if score is not None: values["score"] = score
-        if state is not None: values["state"] = state
-        if count_time is not None: values["count_time"] = count_time
-        if tid is not None: values["tid"] = tid
+        if name is not None:
+            values["name"] = name
+        if username is not None:
+            values["username"] = username
+        if points is not None:
+            values["points"] = points
+        if level is not None:
+            values["level"] = level
+        if score is not None:
+            values["score"] = score
+        if state is not None:
+            values["state"] = state
+        if count_time is not None:
+            values["count_time"] = count_time
+        if tid is not None:
+            values["tid"] = tid
 
         async with async_session() as session:
             if values:
                 try:
-                    await session.execute(update(User).where(User.tid == user_id).values(**values))
+                    await session.execute(
+                        update(User).where(User.tid == user_id).values(**values)
+                    )
                     await session.commit()
                 except IntegrityError as e:
                     await session.rollback()
@@ -85,46 +104,33 @@ class UserCRUD:
 
     @staticmethod
     async def delete(user_id: int) -> bool:
-        """
-        Возвращает True, если пользователь существовал и был удалён.
-        """
         async with async_session() as session:
-            # Проверка существования
             res = await session.execute(select(User.id).where(User.id == user_id))
             exists = res.scalar_one_or_none()
             if exists is None:
                 return False
-            # Удаление
             await session.execute(delete(User).where(User.id == user_id))
             await session.commit()
             return True
 
     @staticmethod
     async def add_duration(user_id: int, amount: DurationInput) -> Optional["User"]:
-        """
-        Прибавляет длительность к полю count_time пользователя.
-        Храним как DateTime = EPOCH + total_seconds. Если count_time=None — считаем 0.
-        amount: timedelta | секунды (int/float).
-        """
-        # нормализуем вход
-        seconds = amount.total_seconds() if isinstance(amount, timedelta) else float(amount)
+        seconds = (
+            amount.total_seconds() if isinstance(amount, timedelta) else float(amount)
+        )
         if seconds < 0:
-            # если дали отрицательное — делегируем на subtract, либо считаем как вычитание
             return await UserCRUD.subtract_duration(user_id, -seconds)
 
         async with async_session() as session:
-            # забираем текущего пользователя
             res = await session.execute(select(User).where(User.tid == user_id))
             user = res.scalar_one_or_none()
             if user is None:
                 return None
 
-            # переводим текущее значение в накопленные секунды
-            current_dt: Optional[datetime] = user.count_time # type: ignore
+            current_dt: Optional[datetime] = user.count_time  # type: ignore
             if current_dt is None:
                 current_seconds = 0.0
             else:
-                # Если current_dt без tzinfo, считаем, что это UTC naive → добавим UTC tzinfo
                 if current_dt.tzinfo is None:
                     current_dt = current_dt.replace(tzinfo=timezone.utc)
                 current_seconds = (current_dt - EPOCH).total_seconds()
@@ -132,7 +138,6 @@ class UserCRUD:
             new_total_seconds = current_seconds + seconds
             new_dt_utc = EPOCH + timedelta(seconds=new_total_seconds)
 
-            # Храним как naive (без tzinfo), т.к. SQLite не поддерживает TZ нормально
             store_dt = new_dt_utc.replace(tzinfo=None)
 
             await session.execute(
@@ -140,19 +145,17 @@ class UserCRUD:
             )
             await session.commit()
 
-            # вернуть актуального пользователя
             res2 = await session.execute(select(User).where(User.tid == user_id))
             return res2.scalar_one_or_none()
 
     @staticmethod
-    async def subtract_duration(user_id: int, amount: DurationInput) -> Optional["User"]:
-        """
-        Вычитает длительность из поля count_time. Не даём уйти ниже нуля.
-        amount: timedelta | секунды (int/float).
-        """
-        seconds = amount.total_seconds() if isinstance(amount, timedelta) else float(amount)
+    async def subtract_duration(
+        user_id: int, amount: DurationInput
+    ) -> Optional["User"]:
+        seconds = (
+            amount.total_seconds() if isinstance(amount, timedelta) else float(amount)
+        )
         if seconds < 0:
-            # отрицательное вычитание = прибавление
             return await UserCRUD.add_duration(user_id, -seconds)
 
         async with async_session() as session:
@@ -161,7 +164,7 @@ class UserCRUD:
             if user is None:
                 return None
 
-            current_dt: Optional[datetime] = user.count_time # type: ignore
+            current_dt: Optional[datetime] = user.count_time  # type: ignore
             if current_dt is None:
                 current_seconds = 0.0
             else:
@@ -180,29 +183,32 @@ class UserCRUD:
 
             res2 = await session.execute(select(User).where(User.tid == user_id))
             return res2.scalar_one_or_none()
-    
+
     @staticmethod
     async def points(user_id: int, points: int):
-        """Сколько поинтов начислить юзеру"""
         async with async_session() as session:
-            result = await session.execute(select(User).where(
-                User.tid == user_id
-            ))
+            result = await session.execute(select(User).where(User.tid == user_id))
             result = result.scalar_one_or_none()
             if not result:
                 return None
             try:
-                obj = update(User).where(User.tid == user_id).values(points=int(result.points) + int(points))
+                obj = (
+                    update(User)
+                    .where(User.tid == user_id)
+                    .values(points=int(result.points) + int(points))
+                )
                 await session.execute(obj)
                 await session.commit()
                 return 1
             except Exception as e:
                 return e
 
-# ---------- Targets ----------
+
 class TargetCRUD:
     @staticmethod
-    async def create(*, user_id: int, description: str, is_done: bool = False) -> Target:
+    async def create(
+        *, user_id: int, description: str, is_done: bool = False
+    ) -> Target:
         async with async_session() as session:
             obj = Target(user_id=user_id, description=description, is_done=is_done)
             session.add(obj)
@@ -217,10 +223,16 @@ class TargetCRUD:
             return res.scalar_one_or_none()
 
     @staticmethod
-    async def list_by_user(user_id: int, limit: int = 100, offset: int = 0) -> Sequence[Target]:
+    async def list_by_user(
+        user_id: int, limit: int = 100, offset: int = 0
+    ) -> Sequence[Target]:
         async with async_session() as session:
             res = await session.execute(
-                select(Target).where(Target.user_id == user_id).order_by(Target.id).limit(limit).offset(offset)
+                select(Target)
+                .where(Target.user_id == user_id)
+                .order_by(Target.id)
+                .limit(limit)
+                .offset(offset)
             )
             return res.scalars().all()
 
@@ -232,12 +244,16 @@ class TargetCRUD:
         is_done: Optional[bool] = None,
     ) -> Optional[Target]:
         values = {}
-        if description is not None: values["description"] = description
-        if is_done is not None: values["is_done"] = is_done
+        if description is not None:
+            values["description"] = description
+        if is_done is not None:
+            values["is_done"] = is_done
 
         async with async_session() as session:
             if values:
-                await session.execute(update(Target).where(Target.id == target_id).values(**values))
+                await session.execute(
+                    update(Target).where(Target.id == target_id).values(**values)
+                )
                 await session.commit()
             res = await session.execute(select(Target).where(Target.id == target_id))
             return res.scalar_one_or_none()
@@ -255,25 +271,24 @@ class TargetCRUD:
 
     @staticmethod
     async def bulk_delete(target_ids: list[int]) -> int:
-        """
-        Удаляет все Target с id в списке target_ids.
-        Возвращает количество удалённых записей.
-        """
         if not target_ids:
             return 0
         async with async_session() as session:
-            res = await session.execute(select(Target.id).where(Target.id.in_(target_ids)))
+            res = await session.execute(
+                select(Target.id).where(Target.id.in_(target_ids))
+            )
             existing = [r[0] for r in res.all()]
             if not existing:
                 return 0
-            result = await session.execute(delete(Target).where(Target.id.in_(existing)))
+            result = await session.execute(
+                delete(Target).where(Target.id.in_(existing))
+            )
             await session.commit()
-            # result.rowcount may not be reliable on some DBs; return len(existing)
             return len(existing)
-    
+
     @staticmethod
     async def get_all_target_today(user_id: int, day: date):
-        start_dt = datetime.combine(day, time.min) 
+        start_dt = datetime.combine(day, time.min)
         next_day_dt = start_dt + timedelta(days=1)
         async with async_session() as session:
             res = await session.execute(
@@ -286,12 +301,22 @@ class TargetCRUD:
             return res.all()
 
 
-# ---------- Sessions ----------
 class SessionCRUD:
     @staticmethod
-    async def create(*, user_id: int, date_start: datetime, date_end: datetime, is_active: bool = False) -> Session:
+    async def create(
+        *,
+        user_id: int,
+        date_start: datetime,
+        date_end: datetime,
+        is_active: bool = False,
+    ) -> Session:
         async with async_session() as session:
-            obj = Session(user_id=user_id, date_start=date_start, date_end=date_end, is_active=is_active)
+            obj = Session(
+                user_id=user_id,
+                date_start=date_start,
+                date_end=date_end,
+                is_active=is_active,
+            )
             session.add(obj)
             await session.commit()
             await session.refresh(obj)
@@ -304,10 +329,16 @@ class SessionCRUD:
             return res.scalar_one_or_none()
 
     @staticmethod
-    async def list_by_user(user_id: int, limit: int = 100, offset: int = 0) -> Sequence[Session]:
+    async def list_by_user(
+        user_id: int, limit: int = 100, offset: int = 0
+    ) -> Sequence[Session]:
         async with async_session() as session:
             res = await session.execute(
-                select(Session).where(Session.user_id == user_id).order_by(Session.id).limit(limit).offset(offset)
+                select(Session)
+                .where(Session.user_id == user_id)
+                .order_by(Session.id)
+                .limit(limit)
+                .offset(offset)
             )
             return res.scalars().all()
 
@@ -320,13 +351,18 @@ class SessionCRUD:
         is_active: Optional[bool] = None,
     ) -> Optional[Session]:
         values = {}
-        if date_start is not None: values["date_start"] = date_start
-        if date_end is not None: values["date_end"] = date_end
-        if is_active is not None: values["is_active"] = is_active
+        if date_start is not None:
+            values["date_start"] = date_start
+        if date_end is not None:
+            values["date_end"] = date_end
+        if is_active is not None:
+            values["is_active"] = is_active
 
         async with async_session() as session:
             if values:
-                await session.execute(update(Session).where(Session.id == session_id).values(**values))
+                await session.execute(
+                    update(Session).where(Session.id == session_id).values(**values)
+                )
                 await session.commit()
             res = await session.execute(select(Session).where(Session.id == session_id))
             return res.scalar_one_or_none()
@@ -334,7 +370,9 @@ class SessionCRUD:
     @staticmethod
     async def delete(session_id: int) -> bool:
         async with async_session() as session:
-            res = await session.execute(select(Session.id).where(Session.id == session_id))
+            res = await session.execute(
+                select(Session.id).where(Session.id == session_id)
+            )
             exists = res.scalar_one_or_none()
             if exists is None:
                 return False
@@ -364,14 +402,9 @@ class SessionCRUD:
                 .order_by(Session.date_start.asc())
             )
             return res.scalars().all()
-        
+
     @staticmethod
     async def total_active_time_on_date(user_id: int, day: date) -> timedelta:
-        """
-        Возвращает суммарное активное время за указанный день как timedelta.
-        Для каждой сессии берём пересечение с окном дня:
-        [start_of_day, end_of_day), и суммируем (end - start).
-        """
         start_of_day = datetime.combine(day, time.min)
         end_of_day = datetime.combine(day + timedelta(days=1), time.min)
 
@@ -380,8 +413,8 @@ class SessionCRUD:
                 select(Session).where(
                     and_(
                         Session.user_id == user_id,
-                        Session.date_start < end_of_day,   # началась до конца дня
-                        Session.date_end >= start_of_day,  # закончилась после начала дня
+                        Session.date_start < end_of_day,
+                        Session.date_end >= start_of_day,
                     )
                 )
             )
@@ -389,23 +422,19 @@ class SessionCRUD:
 
         total = timedelta(0)
         for s in sessions:
-            # Границы пересечения строго datetime
-            start: datetime = max(s.date_start, start_of_day) # type: ignore
-            end: datetime = min(s.date_end, end_of_day) # type: ignore
+            start: datetime = max(s.date_start, start_of_day)  # type: ignore
+            end: datetime = min(s.date_end, end_of_day)  # type: ignore
             if end > start:
-                total += (end - start)
+                total += end - start
 
         return total
-    
+
     @staticmethod
     async def get_active_session(user_id: int):
         async with async_session() as session:
             res = await session.execute(
                 select(Session).where(
-                    and_(
-                        Session.user_id == user_id,
-                        Session.is_active == True
-                    )
+                    and_(Session.user_id == user_id, Session.is_active == True)
                 )
             )
         return res.scalar_one_or_none()
@@ -414,23 +443,16 @@ class SessionCRUD:
     async def get_all_active_session():
         async with async_session() as session:
             res = await session.execute(
-                select(Session).where(
-                    (
-                        Session.is_active == True
-                    )
-                )
+                select(Session).where((Session.is_active == True))
             )
         return res.scalars().all()
-    
+
     @staticmethod
     async def get_all_active_session_by_user(user_id: int):
         async with async_session() as session:
             res = await session.execute(
                 select(Session).where(
-                    and_(
-                        Session.user_id == user_id,
-                        Session.is_active == True
-                    )
+                    and_(Session.user_id == user_id, Session.is_active == True)
                 )
             )
         return res.scalars().all()

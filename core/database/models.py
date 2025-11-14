@@ -27,15 +27,19 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tid: Mapped[int | None] = mapped_column(BigInteger, unique=True, index=True)  # внешний ID (напр., телеграм)
+    tid: Mapped[int | None] = mapped_column(
+        BigInteger, unique=True, index=True
+    )  # внешний ID (напр., телеграм)
     name: Mapped[str | None] = mapped_column(String(255))
     username: Mapped[str | None] = mapped_column(String(255))
     points: Mapped[int] = mapped_column(Integer, default=50)
     level: Mapped[int] = mapped_column(Integer, default=1)
     score: Mapped[int] = mapped_column(Integer, default=0)
-    state: Mapped[str] = mapped_column(String(255), default='Default')
+    state: Mapped[str] = mapped_column(String(255), default="Default")
 
-    date_add: Mapped[DateTime] = mapped_column(DateTime, default=datetime.now(UTC_PLUS_3))
+    date_add: Mapped[DateTime] = mapped_column(
+        DateTime, default=datetime.now(UTC_PLUS_3)
+    )
     count_time: Mapped[str | None] = mapped_column(DateTime, nullable=True)
 
     # Связи
@@ -63,7 +67,9 @@ class Target(Base):
         index=True,
     )
     description: Mapped[str] = mapped_column(String(1500))
-    date_add: Mapped[DateTime] = mapped_column(DateTime, default=datetime.now(UTC_PLUS_3))
+    date_add: Mapped[DateTime] = mapped_column(
+        DateTime, default=datetime.now(UTC_PLUS_3)
+    )
     is_done: Mapped[bool] = mapped_column(Boolean, default=False)
 
     user: Mapped[User] = relationship(back_populates="targets")
@@ -83,7 +89,9 @@ class Session(Base):
     date_start: Mapped[datetime] = mapped_column(DateTime)
     date_end: Mapped[datetime] = mapped_column(DateTime)
     is_active: Mapped[bool] = mapped_column(Boolean, default=False)
-    date_add: Mapped[DateTime] = mapped_column(DateTime, default=datetime.now(UTC_PLUS_3))
+    date_add: Mapped[DateTime] = mapped_column(
+        DateTime, default=datetime.now(UTC_PLUS_3)
+    )
 
     user: Mapped[User] = relationship(back_populates="sessions")
 
@@ -91,8 +99,6 @@ class Session(Base):
         return f"<Session id={self.id} user_id={self.user_id} date_start={self.date_start} date_end={self.date_end} active={self.is_active}>"
 
 
-
-# Инициализация БД (создание таблиц)
 async def async_main():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
