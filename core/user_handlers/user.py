@@ -26,7 +26,7 @@ from core.user_handlers.kb import (
 from utils.random_text import get_text
 from utils.message_utils import update_menu
 from core.database.requests import UserCRUD, TargetCRUD, SessionCRUD
-from utils.redis import get_redis_async
+# from utils.redis import get_redis_async
 from utils.dates import UTC_PLUS_3, format_total_duration
 from utils.cfg_points import get_levels_config
 from utils.dates import hhmmss_to_seconds, format_duration
@@ -41,7 +41,7 @@ logging.basicConfig(
 )
 
 user = Router()
-redis = get_redis_async()
+# redis = get_redis_async()
 
 ERROR_TEXT = "Произошла ошибка! Попробуйте снова("
 NEED_WRIGHTING_TARGET= "Необходимо поставить цели для дальнейшей работы с ботом. Скорее жми на кнопку!"

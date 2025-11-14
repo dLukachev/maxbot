@@ -1,4 +1,3 @@
-import asyncio
 import configparser
 
 from core.database.requests import TargetCRUD, SessionCRUD, UserCRUD
